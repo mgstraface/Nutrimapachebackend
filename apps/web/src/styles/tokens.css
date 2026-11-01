@@ -1,0 +1,84 @@
+/*
+  Dirección visual: "la madriguera al anochecer".
+  El mapache vive en un panel azul-ciruela de atardecer, iluminado por una lámpara amarilla.
+  El resto de la app es claro, tranquilo y legible. Sin rojos ni verdes de juicio.
+*/
+:root {
+  --dusk: #2b2648;        /* cielo de la madriguera */
+  --dusk-2: #3d3666;      /* colina */
+  --lamp: #ffc857;        /* acento: lámpara, registros, botón principal */
+  --lamp-soft: #fff1cc;
+  --mist: #f4f2fa;        /* fondo general */
+  --paper: #ffffff;
+  --ink: #1f1b35;
+  --ink-2: #5b5577;       /* texto secundario */
+  --line: #e2def0;
+  --fur: #8f8aa3;         /* gris mapache */
+  --fur-light: #cdc9da;
+  --mask: #2c283d;
+
+  --font-display: 'Bricolage Grotesque', ui-rounded, system-ui, sans-serif;
+  --font-body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+
+  --step--1: 0.8125rem;
+  --step-0: 1rem;
+  --step-1: 1.1875rem;
+  --step-2: 1.5rem;
+  --step-3: 2rem;
+
+  --radius-s: 10px;
+  --radius-m: 18px;
+  --radius-l: 28px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tabbar-h: 64px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--mist);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  line-height: 1.15;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid var(--lamp);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

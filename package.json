@@ -1,0 +1,16 @@
+{
+  "name": "nutrimapache",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @nutrimapache/api & npm run dev -w @nutrimapache/web",
+    "dev:web": "npm run dev -w @nutrimapache/web",
+    "dev:api": "npm run dev -w @nutrimapache/api",
+    "build": "npm run build -w @nutrimapache/api && npm run build -w @nutrimapache/web",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}

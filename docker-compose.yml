@@ -1,0 +1,44 @@
+# Producción en el VPS: docker compose up -d --build
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      MONGO_URL: mongodb://mongo:27017/nutrimapache
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    # Sin puertos expuestos: solo la API llega a la base.
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  caddy_data:
+  caddy_config:
+  uploads:
+  mongo_data:

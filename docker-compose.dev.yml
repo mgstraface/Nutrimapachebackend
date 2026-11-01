@@ -1,0 +1,11 @@
+# Desarrollo local: solo Mongo. La API y el front corren con `npm run dev`.
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_dev:/data/db
+
+volumes:
+  mongo_dev:
