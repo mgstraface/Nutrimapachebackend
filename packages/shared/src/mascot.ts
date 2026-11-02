@@ -13,6 +13,8 @@ export type MascotEvent =
   | 'entreno-registrado'
   | 'energia-baja'
   | 'vuelta-tras-pausa'
+  | 'agua-registrada'
+  | 'descanso-elegido'
   | 'caricia';
 
 export interface MascotContext {
@@ -49,6 +51,10 @@ export function mascotState(ctx: MascotContext, seed = Date.now()): MascotState 
       return { expression: 'descanso', phrase: pick(['Buen trabajo. Ahora a recuperar energía.', 'Qué bien moverse. Respirá hondo.'], seed) };
     case 'energia-baja':
       return { expression: 'acompañamiento', phrase: pick(['Hay días así. Estoy acá con vos.', 'Gracias por contarme. Tomalo con calma hoy.'], seed) };
+    case 'agua-registrada':
+      return { expression: 'alegria', phrase: pick(['¡Glu glu! 💧', '¡Salud! Bien ahí con el agua.', 'Un vasito más, qué bien.'], seed) };
+    case 'descanso-elegido':
+      return { expression: 'descanso', phrase: pick(['Descansar también suma. Disfrutalo.', 'Hoy el cuerpo recupera. Bien elegido.'], seed) };
     case 'vuelta-tras-pausa':
       return { expression: 'acompañamiento', phrase: `¡Hola de nuevo, ${n}! ¿Arrancamos con lo que viene?` };
     case 'caricia':

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { mascotState, weekdayIndex, WEEKDAYS, type Meal } from '@nutrimapache/shared';
+import { emptyDay, mascotState, plannedFor, summarizeDay, tipsFor, weekdayIndex, WEEKDAYS, type Meal } from '@nutrimapache/shared';
 import { Cachete } from '../../mascot/Cachete';
+import { errorText } from '../../lib/api';
 import { localDate, useStore } from '../../lib/store';
 import { useOpenMealSheet } from '../meals/registerContext';
+import { DaySheet } from '../day/DaySheet';
 
 const EVENT_TTL = 6000;
 
@@ -12,8 +14,11 @@ export function HomeScreen() {
   const meals = useStore((s) => s.meals);
   const lastEvent = useStore((s) => s.lastEvent);
   const emit = useStore((s) => s.emit);
+  const saveDay = useStore((s) => s.saveDay);
   const openSheet = useOpenMealSheet();
   const [now, setNow] = useState(() => new Date());
+  const [dayOpen, setDayOpen] = useState(false);
+  const [dayError, setDayError] = useState<string | null>(null);
 
   // Re-evaluar el ánimo de Cachete cuando vence un evento.
   useEffect(() => {
@@ -24,8 +29,33 @@ export function HomeScreen() {
   const today = localDate(now);
   const todaysMeals = meals.filter((m) => m.date === today);
   const dayIdx = weekdayIndex(now);
-  const routineToday = profile.routine[dayIdx];
-  const training = profile.trainingTypes.find((t) => t.key === routineToday?.trainingKey);
+  const planned = plannedFor(profile, now);
+  const training = planned;
+  const day = useStore((s) => s.days[today]) ?? emptyDay(today);
+  const daySummary = summarizeDay(day, planned);
+  const tomorrow = plannedFor(profile, new Date(now.getTime() + 864e5));
+  const [dismissed, dismiss] = useDismissedTips(today);
+  const tip = tipsFor({
+    hour: now.getHours(),
+    profile,
+    today: day,
+    loggedSlots: [...new Set(meals.filter((m) => m.date === today).map((m) => m.slotKey))],
+    plannedToday: !!planned,
+    trainsTomorrowMorning: tomorrow?.moment === 'mañana',
+  }).find((t) => !dismissed.includes(t.id));
+
+  const addWater = async (delta: number) => {
+    setDayError(null);
+    try {
+      const water = Math.max(0, Math.min(30, day.water + delta));
+      if (water === day.water) return;
+      const p = saveDay(today, { water });
+      if (delta > 0) emit('agua-registrada');
+      await p;
+    } catch (err) {
+      setDayError(errorText(err));
+    }
+  };
 
   const lastLogAt = meals.reduce((max, m) => Math.max(max, Date.parse(m.createdAt)), 0);
   const daysSinceLastLog = lastLogAt ? Math.floor((now.getTime() - lastLogAt) / 864e5) : 0;
@@ -37,7 +67,7 @@ export function HomeScreen() {
         {
           event: active?.event ?? 'abrir-app',
           hour: now.getHours(),
-          isRestDay: !training,
+          isRestDay: !training || day.status === 'descanso',
           name: profile.mascotName,
           displayName: profile.displayName,
           daysSinceLastLog,
@@ -45,7 +75,7 @@ export function HomeScreen() {
         active?.at ?? 0,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [active?.at, active?.event, now.getHours(), training?.key, profile.displayName, profile.mascotName, daysSinceLastLog],
+    [active?.at, active?.event, now.getHours(), training?.key, day.status, profile.displayName, profile.mascotName, daysSinceLastLog],
   );
 
   const bySlot = (key: string) => todaysMeals.filter((m) => m.slotKey === key);
@@ -58,14 +88,13 @@ export function HomeScreen() {
           <p className="den-date">
             {WEEKDAYS[dayIdx]} {now.getDate()}
           </p>
-          {training ? (
-            <span className="chip chip-dusk">
-              {training.label}
-              {routineToday?.moment ? ` · ${routineToday.moment}` : ''}
+          <button type="button" className={`chip chip-dusk chip-btn-dusk${daySummary ? ' is-logged' : ''}`} onClick={() => setDayOpen(true)}>
+            {daySummary ??
+              (training ? `${training.label}${training.moment ? ` · ${training.moment}` : ''}` : 'Día libre')}
+            <span className="chip-edit" aria-hidden="true">
+              {daySummary ? '✎' : '+'}
             </span>
-          ) : (
-            <span className="chip chip-dusk">Día libre</span>
-          )}
+          </button>
         </div>
 
         <div className="den-stage">
@@ -87,6 +116,22 @@ export function HomeScreen() {
       </section>
 
       <section className="day" aria-labelledby="day-title">
+        {tip && (
+          <aside className="tip" aria-label={`Sugerencia de ${profile.mascotName}`}>
+            <p>{tip.text}</p>
+            <div className="tip-actions">
+              {tip.action?.kind === 'agua' && (
+                <button type="button" className="btn-primary btn-small" onClick={() => void addWater(1)}>
+                  {tip.action.label}
+                </button>
+              )}
+              <button type="button" className="btn-quiet btn-small" onClick={() => dismiss(tip.id)}>
+                Ahora no
+              </button>
+            </div>
+          </aside>
+        )}
+
         <h2 id="day-title" className="day-title">
           Tu día
         </h2>
@@ -125,9 +170,61 @@ export function HomeScreen() {
             ))}
           </div>
         )}
+
+        <div className="water" aria-label="Agua de hoy">
+          <div>
+            <h3>Agua</h3>
+            <p className="hint">{day.water === 0 ? 'Tocá + cada vez que tomes un vaso.' : day.water === 1 ? '1 vaso hoy' : `${day.water} vasos hoy`}</p>
+          </div>
+          <div className="water-glasses" aria-hidden="true">
+            {Array.from({ length: Math.min(day.water, 10) }, (_, i) => (
+              <span key={i} className="drop" />
+            ))}
+            {day.water > 10 && <span className="hint">+{day.water - 10}</span>}
+          </div>
+          <div className="water-btns">
+            <button type="button" className="water-btn" aria-label="Quitar un vaso" disabled={day.water === 0} onClick={() => void addWater(-1)}>
+              −
+            </button>
+            <button type="button" className="water-btn water-add" aria-label="Sumar un vaso" onClick={() => void addWater(1)}>
+              +
+            </button>
+          </div>
+        </div>
+        {dayError && (
+          <p className="form-error" role="alert">
+            {dayError}
+          </p>
+        )}
       </section>
+
+      <DaySheet open={dayOpen} date={today} planned={planned} onClose={() => setDayOpen(false)} />
     </div>
   );
+}
+
+/** Sugerencias descartadas hoy. Se guardan solo en este dispositivo: es una comodidad, no un dato. */
+function useDismissedTips(date: string): [string[], (id: string) => void] {
+  const key = `cn_tips_${date}`;
+  const read = (): string[] => {
+    try {
+      return JSON.parse(localStorage.getItem(key) ?? '[]') as string[];
+    } catch {
+      return [];
+    }
+  };
+  const [list, setList] = useState<string[]>(read);
+  useEffect(() => setList(read()), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dismiss = (id: string) => {
+    const next = [...list, id];
+    setList(next);
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {
+      /* sin localStorage: queda descartada hasta recargar */
+    }
+  };
+  return [list, dismiss];
 }
 
 function MealLine({ meal, onOpen }: { meal: Meal; onOpen: () => void }) {

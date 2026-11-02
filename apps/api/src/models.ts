@@ -53,6 +53,35 @@ const mealSchema = new Schema(
 mealSchema.index({ userId: 1, date: -1 });
 export const Meal = mongoose.model('Meal', mealSchema);
 
+/* Días: actividad (como la rutina, distinta o descanso), energía y agua. Uno por usuaria y fecha. */
+const daySchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, required: true },
+    date: { type: String, required: true },
+    status: { type: String, default: null },
+    activities: { type: [Schema.Types.Mixed], default: [] },
+    energy: { type: Number, default: null },
+    water: { type: Number, default: 0 },
+    note: { type: String, default: '' },
+  },
+  { timestamps: true, minimize: false },
+);
+daySchema.index({ userId: 1, date: -1 }, { unique: true });
+export const Day = mongoose.model('Day', daySchema);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function toDay(doc: any) {
+  return {
+    date: doc.date,
+    status: doc.status ?? null,
+    activities: doc.activities ?? [],
+    energy: doc.energy ?? null,
+    water: doc.water ?? 0,
+    note: doc.note ?? '',
+    updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : undefined,
+  };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function toMeal(doc: any) {
   return {

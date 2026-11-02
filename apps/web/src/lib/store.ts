@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Meal, MealInput, MascotEvent, Profile, SessionUser } from '@nutrimapache/shared';
+import { emptyDay, type DayLog, type Meal, type MealInput, type MascotEvent, type Profile, type SessionUser } from '@nutrimapache/shared';
 import { ApiError, api } from './api';
 
 /**
@@ -19,6 +19,8 @@ interface State {
   user: SessionUser | null;
   profile: Profile | null;
   meals: Meal[];
+  /** Días anotados (actividad, energía, agua), por fecha "YYYY-MM-DD" */
+  days: Record<string, DayLog>;
   lastEvent: { event: MascotEvent; at: number } | null;
 
   boot: () => Promise<void>;
@@ -28,6 +30,8 @@ interface State {
   addMeal: (m: MealInput) => Promise<Meal>;
   updateMeal: (id: string, m: Partial<MealInput>) => Promise<void>;
   deleteMeal: (id: string) => Promise<void>;
+  /** Guarda cambios de un día; lo que no se pasa queda como estaba. */
+  saveDay: (date: string, patch: Partial<Omit<DayLog, 'date' | 'updatedAt'>>) => Promise<void>;
   wipeData: () => Promise<void>;
   emit: (event: MascotEvent) => void;
 }
@@ -42,10 +46,12 @@ try {
 const sortMeals = (meals: Meal[]) =>
   [...meals].sort((a, b) => (a.date === b.date ? (a.time ?? '').localeCompare(b.time ?? '') : b.date.localeCompare(a.date)));
 
-export const useStore = create<State>()((set) => {
+export const useStore = create<State>()((set, get) => {
   const enter = async (me: Me) => {
-    const meals = await api<Meal[]>('/meals');
-    set({ status: 'ready', bootError: null, user: me.user, profile: me.profile, meals: sortMeals(meals) });
+    const from = localDate(new Date(Date.now() - 120 * 864e5));
+    const [meals, dayList] = await Promise.all([api<Meal[]>('/meals'), api<DayLog[]>(`/days?from=${from}`)]);
+    const days = Object.fromEntries(dayList.map((d) => [d.date, d]));
+    set({ status: 'ready', bootError: null, user: me.user, profile: me.profile, meals: sortMeals(meals), days });
   };
 
   return {
@@ -54,6 +60,7 @@ export const useStore = create<State>()((set) => {
     user: null,
     profile: null,
     meals: [],
+    days: {},
     lastEvent: null,
 
     boot: async () => {
@@ -76,7 +83,7 @@ export const useStore = create<State>()((set) => {
       try {
         await api('/auth/logout', { method: 'POST' });
       } finally {
-        set({ status: 'anon', user: null, profile: null, meals: [], lastEvent: null });
+        set({ status: 'anon', user: null, profile: null, meals: [], days: {}, lastEvent: null });
       }
     },
 
@@ -101,9 +108,25 @@ export const useStore = create<State>()((set) => {
       set((s) => ({ meals: s.meals.filter((m) => m.id !== id) }));
     },
 
+    saveDay: async (date, patch) => {
+      const prev = get().days[date] ?? emptyDay(date);
+      const next: DayLog = { ...prev, ...patch, date };
+      // Optimista: se ve al instante; si falla, vuelve atrás y avisa.
+      set((s) => ({ days: { ...s.days, [date]: next } }));
+      try {
+        const { date: _d, updatedAt: _u, ...body } = next;
+        const saved = await api<DayLog>(`/days/${date}`, { method: 'PUT', body });
+        // Si mientras tanto hubo otro toque (ej. varios vasos seguidos), gana el más nuevo.
+        if (get().days[date] === next) set((s) => ({ days: { ...s.days, [date]: saved } }));
+      } catch (err) {
+        if (get().days[date] === next) set((s) => ({ days: { ...s.days, [date]: prev } }));
+        throw err;
+      }
+    },
+
     wipeData: async () => {
       await api('/privacy/data', { method: 'DELETE' });
-      set({ profile: null, meals: [], lastEvent: null });
+      set({ profile: null, meals: [], days: {}, lastEvent: null });
     },
 
     emit: (event) => set({ lastEvent: { event, at: Date.now() } }),

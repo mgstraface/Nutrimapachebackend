@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import {
   PROFILE_TEMPLATES,
   createUserSchema,
+  dayLogSchema,
   loginSchema,
   mealInputSchema,
   profileSchema,
@@ -21,7 +22,7 @@ import {
   verifyPassword,
 } from './auth';
 import { dbReady } from './config/db';
-import { Meal, Profile, User, toMeal, toSessionUser } from './models';
+import { Day, Meal, Profile, User, toDay, toMeal, toSessionUser } from './models';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
@@ -145,15 +146,50 @@ export function apiRouter(): Router {
     }),
   );
 
+  /* ---------------- días: actividad, energía, agua ---------------- */
+
+  r.get(
+    '/days',
+    requireUser,
+    h(async (req, res) => {
+      const q: Record<string, unknown> = { userId: req.user!.id };
+      const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+      const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+      if (from || to) q.date = { ...(from ? { $gte: from } : {}), ...(to ? { $lte: to } : {}) };
+      const docs = await Day.find(q).sort({ date: -1 }).limit(1000).lean();
+      res.json(docs.map(toDay));
+    }),
+  );
+
+  r.put(
+    '/days/:date',
+    requireUser,
+    h(async (req, res) => {
+      const date = req.params.date!;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        res.status(400).json({ error: 'Fecha inválida' });
+        return;
+      }
+      const data = dayLogSchema.parse(req.body);
+      const doc = await Day.findOneAndUpdate(
+        { userId: req.user!.id, date },
+        { $set: data },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      ).lean();
+      res.json(toDay(doc));
+    }),
+  );
+
   /* ---------------- privacidad ---------------- */
 
   r.get(
     '/privacy/export',
     requireUser,
     h(async (req, res) => {
-      const [profile, meals] = await Promise.all([
+      const [profile, meals, days] = await Promise.all([
         Profile.findOne({ userId: req.user!.id }).lean(),
         Meal.find({ userId: req.user!.id }).sort({ date: 1, time: 1 }).lean(),
+        Day.find({ userId: req.user!.id }).sort({ date: 1 }).lean(),
       ]);
       const day = new Date().toISOString().slice(0, 10);
       res.setHeader('Content-Disposition', `attachment; filename="cachete-nutri-${day}.json"`);
@@ -162,6 +198,7 @@ export function apiRouter(): Router {
         user: { username: req.user!.username, displayName: req.user!.displayName },
         profile: profile?.data ?? null,
         meals: meals.map(toMeal),
+        days: days.map(toDay),
       });
     }),
   );
@@ -171,7 +208,11 @@ export function apiRouter(): Router {
     '/privacy/data',
     requireUser,
     h(async (req, res) => {
-      await Promise.all([Profile.deleteOne({ userId: req.user!.id }), Meal.deleteMany({ userId: req.user!.id })]);
+      await Promise.all([
+        Profile.deleteOne({ userId: req.user!.id }),
+        Meal.deleteMany({ userId: req.user!.id }),
+        Day.deleteMany({ userId: req.user!.id }),
+      ]);
       res.status(204).end();
     }),
   );
@@ -269,6 +310,7 @@ export function apiRouter(): Router {
       }
       await Promise.all([
         Meal.deleteMany({ userId: id }),
+        Day.deleteMany({ userId: id }),
         Profile.deleteOne({ userId: id }),
         endAllSessions(String(id)),
         User.deleteOne({ _id: id }),

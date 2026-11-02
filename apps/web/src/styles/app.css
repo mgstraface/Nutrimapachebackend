@@ -705,3 +705,154 @@ textarea {
   grid-template-columns: 1fr auto auto;
   gap: 6px;
 }
+
+/* ---------- actividad del día ---------- */
+.chip-btn-dusk {
+  font: inherit;
+  font-size: var(--step--1);
+  gap: 8px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.chip-btn-dusk.is-logged {
+  background: var(--lamp);
+  border-color: var(--lamp);
+  color: var(--ink);
+  font-weight: 700;
+}
+.chip-edit {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 0.8125rem;
+  line-height: 1;
+}
+.is-logged .chip-edit {
+  background: rgba(31, 27, 53, 0.12);
+}
+.day-planned {
+  margin: 0;
+  font-size: var(--step-0);
+}
+.act-list {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.act-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--lamp-soft);
+  border-radius: var(--radius-s);
+  padding: 6px 6px 6px 12px;
+}
+.act-draft {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+.act-min {
+  width: 76px;
+  padding: 8px 10px;
+}
+
+/* ---------- sugerencia de Cachete ---------- */
+.tip {
+  margin: 6px 0 18px;
+  padding: 14px 16px;
+  background: var(--paper);
+  border: 1.5px solid var(--lamp);
+  border-radius: var(--radius-m);
+  box-shadow: 0 0 0 4px var(--lamp-soft);
+  display: grid;
+  gap: 10px;
+}
+.tip p {
+  margin: 0;
+}
+.tip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---------- agua ---------- */
+.water {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'txt btns' 'glasses glasses';
+  align-items: center;
+  gap: 8px 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 12px 14px;
+}
+.water > div:first-child {
+  grid-area: txt;
+}
+.water h3 {
+  font-size: var(--step-1);
+}
+.water .hint {
+  margin: 2px 0 0;
+}
+.water-glasses {
+  grid-area: glasses;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: 0;
+}
+.water-glasses:empty {
+  display: none;
+}
+.drop {
+  width: 16px;
+  height: 20px;
+  background: var(--turq);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  clip-path: polygon(50% 0, 100% 62%, 92% 85%, 72% 100%, 28% 100%, 8% 85%, 0 62%);
+}
+.water-btns {
+  grid-area: btns;
+  display: flex;
+  gap: 8px;
+}
+.water-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.water-btn:disabled {
+  opacity: 0.35;
+}
+.water-add {
+  background: var(--turq);
+  border-color: var(--turq);
+  color: #fff;
+}
+
+/* historial: actividad del día */
+.hist-move {
+  margin: -2px 0 8px;
+  color: var(--ink-2);
+  font-size: var(--step--1);
+}
