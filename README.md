@@ -8,7 +8,8 @@ PWA para iPhone que acompaña hábitos alimentarios sin culpa, con un mapache qu
 apps/web         React + Vite (PWA, mobile-first)
 apps/api         Node + Express + MongoDB
 packages/shared  Esquemas Zod, plantillas de perfil, lógica del mapache
-docker/          Caddyfile (HTTPS + estáticos + proxy a la API)
+docker/          nginx interno del contenedor web (PWA + proxy a la API)
+scripts/         deploy-vps.sh (deploy en el VPS compartido)
 ```
 
 ## Desarrollo
