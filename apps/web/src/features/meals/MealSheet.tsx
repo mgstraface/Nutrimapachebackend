@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { MealItem } from '@nutrimapache/shared';
+import { errorText } from '../../lib/api';
 import { localDate, localTime, useStore } from '../../lib/store';
 
 export type MealSheetTarget = { mode: 'new'; slotKey?: string } | { mode: 'edit'; mealId: string };
@@ -34,9 +35,13 @@ export function MealSheet({ target, onClose }: Props) {
   const [description, setDescription] = useState('');
   const [items, setItems] = useState<ItemDraft[]>([]);
   const [energy, setEnergy] = useState<number | undefined>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!target || !profile) return;
+    setBusy(false);
+    setError(null);
     if (editing) {
       setSlotKey(editing.slotKey);
       setTime(editing.time ?? '');
@@ -57,7 +62,7 @@ export function MealSheet({ target, onClose }: Props) {
 
   const canSave = description.trim().length > 0 || items.some((i) => i.name.trim());
 
-  const save = () => {
+  const save = async () => {
     const cleanItems: MealItem[] = items
       .filter((i) => i.name.trim())
       .map((i) => ({
@@ -72,13 +77,34 @@ export function MealSheet({ target, onClose }: Props) {
     const data = {
       slotKey,
       time: time || undefined,
-      description: description.trim() || undefined,
+      // Al editar, un texto vacío tiene que viajar como '' para que se borre en el servidor.
+      description: description.trim() || (editing ? '' : undefined),
       items: cleanItems,
       feeling: energy ? { energy } : undefined,
     };
-    if (editing) updateMeal(editing.id, data);
-    else addMeal({ ...data, date: localDate(), origin: 'manual' });
-    onClose();
+    setBusy(true);
+    setError(null);
+    try {
+      if (editing) await updateMeal(editing.id, data);
+      else await addMeal({ ...data, date: localDate(), origin: 'manual' });
+      onClose();
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!editing) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteMeal(editing.id);
+      onClose();
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
   };
 
   return (
@@ -201,21 +227,19 @@ export function MealSheet({ target, onClose }: Props) {
               </fieldset>
             </div>
 
+            {error && (
+              <p className="form-error sheet-error" role="alert">
+                {error}
+              </p>
+            )}
             <footer className="sheet-foot">
               {editing && (
-                <button
-                  type="button"
-                  className="btn-quiet"
-                  onClick={() => {
-                    deleteMeal(editing.id);
-                    onClose();
-                  }}
-                >
+                <button type="button" className="btn-quiet" disabled={busy} onClick={() => void remove()}>
                   Borrar
                 </button>
               )}
-              <button type="button" className="btn-primary" disabled={!canSave} onClick={save}>
-                {editing ? 'Guardar cambios' : 'Guardar comida'}
+              <button type="button" className="btn-primary" disabled={!canSave || busy} onClick={() => void save()}>
+                {busy ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar comida'}
               </button>
             </footer>
           </motion.div>

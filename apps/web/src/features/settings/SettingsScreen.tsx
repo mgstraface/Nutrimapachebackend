@@ -1,25 +1,38 @@
-import { GOAL_LABELS } from '@nutrimapache/shared';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { GOAL_LABELS, type Profile } from '@nutrimapache/shared';
+import { errorText } from '../../lib/api';
 import { useStore } from '../../lib/store';
 
 export function SettingsScreen() {
   const profile = useStore((s) => s.profile)!;
-  const meals = useStore((s) => s.meals);
-  const setProfile = useStore((s) => s.setProfile);
-  const wipe = useStore((s) => s.wipe);
+  const user = useStore((s) => s.user)!;
+  const saveProfile = useStore((s) => s.saveProfile);
+  const wipeData = useStore((s) => s.wipeData);
+  const logout = useStore((s) => s.logout);
+  const [error, setError] = useState<string | null>(null);
 
-  const exportData = () => {
-    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile, meals }, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `cachete-nutri-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+  const update = async (p: Profile) => {
+    setError(null);
+    try {
+      await saveProfile(p);
+    } catch (err) {
+      setError(errorText(err));
+    }
   };
 
   return (
     <div className="page">
       <h1 className="page-title">{profile.displayName}</h1>
-      <p className="muted">{GOAL_LABELS[profile.goal]}</p>
+      <p className="muted">
+        {GOAL_LABELS[profile.goal]} · usuario <strong>{user.username}</strong>
+      </p>
+
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
 
       <section className="group">
         <h2>Qué querés ver</h2>
@@ -28,7 +41,7 @@ export function SettingsScreen() {
           <input
             type="checkbox"
             checked={profile.view.showCalories}
-            onChange={(e) => setProfile({ ...profile, view: { ...profile.view, showCalories: e.target.checked } })}
+            onChange={(e) => void update({ ...profile, view: { ...profile.view, showCalories: e.target.checked } })}
           />
         </label>
         <label className="toggle">
@@ -36,7 +49,7 @@ export function SettingsScreen() {
           <input
             type="checkbox"
             checked={profile.view.showMacros}
-            onChange={(e) => setProfile({ ...profile, view: { ...profile.view, showMacros: e.target.checked } })}
+            onChange={(e) => void update({ ...profile, view: { ...profile.view, showMacros: e.target.checked } })}
           />
         </label>
         <p className="hint">Siempre van a aparecer como rango aproximado, nunca como un número exacto.</p>
@@ -44,18 +57,36 @@ export function SettingsScreen() {
 
       <section className="group">
         <h2>Tus datos</h2>
-        <p className="hint">Por ahora todo queda guardado solo en este teléfono.</p>
-        <button type="button" className="btn-quiet" onClick={exportData}>
+        <p className="hint">Se guardan en tu cuenta, así los ves desde cualquier dispositivo. Solo vos podés verlos.</p>
+        {/* Descarga directa: el servidor responde el archivo con la cookie de sesión */}
+        <a className="btn-quiet btn-link" href="/api/v1/privacy/export" download>
           Exportar mis datos
-        </button>
+        </a>
         <button
           type="button"
           className="btn-quiet"
-          onClick={() => {
-            if (confirm('Esto borra tu perfil y todas tus comidas de este teléfono. ¿Seguimos?')) wipe();
+          onClick={async () => {
+            if (!confirm('Esto borra tu perfil y todas tus comidas. Tu cuenta sigue existiendo y podés volver a empezar. ¿Seguimos?')) return;
+            try {
+              await wipeData();
+            } catch (err) {
+              setError(errorText(err));
+            }
           }}
         >
-          Borrar todo
+          Borrar mis datos
+        </button>
+      </section>
+
+      <section className="group">
+        <h2>Cuenta</h2>
+        {user.role === 'admin' && (
+          <Link to="/admin" className="btn-quiet btn-link">
+            Administrar usuarios
+          </Link>
+        )}
+        <button type="button" className="btn-quiet" onClick={() => void logout()}>
+          Cerrar sesión
         </button>
       </section>
     </div>

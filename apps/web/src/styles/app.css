@@ -576,3 +576,132 @@ textarea {
   grid-template-columns: 1fr 110px 36px;
   gap: 6px;
 }
+
+/* ---------- cuentas: splash, login, mensajes ---------- */
+.splash {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  background: linear-gradient(180deg, var(--dusk) 0%, var(--dusk-2) 100%);
+  color: #fff;
+}
+.splash p {
+  margin: 0;
+  max-width: 280px;
+}
+.splash .btn-primary {
+  background: var(--lamp);
+  color: var(--ink);
+}
+.form-error,
+.form-ok {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  font-size: var(--step--1);
+}
+.form-error {
+  background: #fdecef;
+  color: #8c1d3a;
+}
+.form-ok {
+  background: #e7f6f9;
+  color: #165b6b;
+}
+.sheet-error {
+  margin: 0 20px 10px;
+}
+.onb-admin {
+  text-align: center;
+  margin: 20px 0 0;
+}
+.onb-admin a {
+  color: var(--dusk-2);
+  font-weight: 700;
+}
+
+/* ---------- botones extra ---------- */
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.btn-small {
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: var(--step--1);
+}
+.btn-danger {
+  color: #a3264a;
+  border-color: #f2c9d4;
+}
+.chip-quiet {
+  background: var(--line);
+  color: var(--ink-2);
+}
+
+/* ---------- panel de usuarios ---------- */
+.admin {
+  padding-bottom: calc(32px + var(--safe-bottom));
+}
+.back-link {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: var(--dusk-2);
+  font-weight: 700;
+  text-decoration: none;
+}
+.admin-card,
+.user-row {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 16px;
+}
+.user-row {
+  display: grid;
+  gap: 6px;
+}
+.user-row.is-off {
+  opacity: 0.65;
+}
+.user-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.user-head strong {
+  display: block;
+  font-size: var(--step-1);
+}
+.user-handle {
+  color: var(--ink-2);
+  font-size: var(--step--1);
+}
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.user-actions .btn-quiet,
+.user-actions .btn-primary {
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: var(--step--1);
+}
+.user-pass {
+  display: grid;
+  gap: 8px;
+}
+.pass-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+}

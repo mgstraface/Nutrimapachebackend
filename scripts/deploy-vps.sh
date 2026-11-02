@@ -49,8 +49,23 @@ env_get() { grep -E "^$1=" .env 2>/dev/null | head -1 | cut -d= -f2- || true; }
 
 if [ ! -f .env ]; then
   say "Creando .env"
-  sed -e "s#^JWT_SECRET=.*#JWT_SECRET=$(openssl rand -hex 32)#" .env.example > .env
+  cp .env.example .env
   chmod 600 .env
+fi
+
+# Admin inicial: si falta la contraseña, se genera una y se muestra UNA vez (solo en terminal).
+# La API lo crea al arrancar si todavía no existe ningún admin. Después se cambia desde el panel.
+if ! grep -qE '^ADMIN_PASSWORD=.+' .env; then
+  grep -qE '^ADMIN_USERNAME=' .env || echo "ADMIN_USERNAME=mati" >> .env
+  sed -i '/^ADMIN_PASSWORD=/d' .env
+  ADMIN_PASS="$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-14)"
+  echo "ADMIN_PASSWORD=$ADMIN_PASS" >> .env
+  say "Admin inicial"
+  if [ -t 1 ]; then
+    echo "  Usuario:    $(env_get ADMIN_USERNAME)"
+    echo "  Contraseña: $ADMIN_PASS"
+  fi
+  echo "  (queda guardada en $APP_DIR/.env; cambiala desde el panel después de entrar)"
 fi
 
 DOMAIN="$(env_get DOMAIN)"

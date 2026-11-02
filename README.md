@@ -43,6 +43,8 @@ nano /root/nutrimapache/app/.env                    # completar DOMAIN
 bash /root/nutrimapache/app/scripts/deploy-vps.sh   # levanta, crea el sitio de nginx y pide HTTPS
 ```
 
+La primera vez el script genera la contraseña del admin (usuario `mati`) y la muestra en pantalla; también queda en el `.env`. Con esa cuenta se entra a **Yo → Administrar usuarios** (o `/admin`) para crear las cuentas de las demás personas.
+
 Después, cada push a `main` despliega solo (`.github/workflows/deploy.yml`). Secrets del repo: `VPS_HOST`, `VPS_PORT`, `VPS_USER` y `VPS_SSH_KEY`, con una **clave SSH nueva y propia** de este proyecto, restringida en `authorized_keys` del VPS:
 
 ```
@@ -56,7 +58,7 @@ En el iPhone: Safari → Compartir → **Agregar a inicio**.
 ## Estado
 
 - **Fase 1 (esta):** interfaz, Cachete con 5 expresiones animadas, onboarding con plantillas, registro manual de comidas guardado en el teléfono, historial, exportar y borrar.
-- **Fase 2:** cuentas en la API, comidas en Mongo, catálogo de alimentos con rangos, fotos sin análisis, admin de usuarios.
+- **Fase 2 (en curso):** ✅ cuentas con usuario y contraseña creadas por el admin, panel de usuarios, perfil y comidas en Mongo, exportar y borrar desde la cuenta. Falta: catálogo de alimentos con rangos y fotos sin análisis.
 - **Fase 3:** menú semanal, recetas, entrenamiento.
 - **Fase 4:** análisis de fotos con IA, solo con consentimiento.
 - **Fase 5:** deploy y backups.

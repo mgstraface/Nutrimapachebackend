@@ -7,15 +7,21 @@ import {
   type MealSlot,
   type ProfileTemplate,
 } from '@nutrimapache/shared';
+import { Link } from 'react-router-dom';
 import { Cachete } from '../../mascot/Cachete';
+import { errorText } from '../../lib/api';
 import { useStore } from '../../lib/store';
 
 type Step = 'nombre' | 'plantilla' | 'comidas';
 
 export function OnboardingScreen() {
-  const setProfile = useStore((s) => s.setProfile);
+  const saveProfile = useStore((s) => s.saveProfile);
+  const user = useStore((s) => s.user);
+  const isAdmin = user?.role === 'admin';
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('nombre');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(user?.displayName ?? '');
   const [mascotName, setMascotName] = useState('Cachete');
   const [template, setTemplate] = useState<ProfileTemplate>(PROFILE_TEMPLATES[0]!);
   const [goal, setGoal] = useState<Goal>(PROFILE_TEMPLATES[0]!.profile.goal);
@@ -27,15 +33,22 @@ export function OnboardingScreen() {
     setSlots(t.profile.mealSlots.map((s) => ({ ...s })));
   };
 
-  const finish = () => {
-    setProfile({
-      ...template.profile,
-      displayName: name.trim(),
-      mascotName: mascotName.trim() || 'Cachete',
-      goal,
-      mealSlots: slots.filter((s) => s.label.trim()),
-      consents: { photoStorage: false, aiAnalysis: false, acceptedAt: null, version: '2026-11' },
-    });
+  const finish = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await saveProfile({
+        ...template.profile,
+        displayName: name.trim(),
+        mascotName: mascotName.trim() || 'Cachete',
+        goal,
+        mealSlots: slots.filter((s) => s.label.trim()),
+        consents: { photoStorage: false, aiAnalysis: false, acceptedAt: null, version: '2026-11' },
+      });
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
   };
 
   return (
@@ -156,15 +169,26 @@ export function OnboardingScreen() {
               Sumar una comida
             </button>
           )}
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
           <div className="onb-actions">
             <button type="button" className="btn-quiet" onClick={() => setStep('plantilla')}>
               Volver
             </button>
-            <button type="button" className="btn-primary" onClick={finish}>
-              Empezar
+            <button type="button" className="btn-primary" onClick={() => void finish()} disabled={busy}>
+              {busy ? 'Guardando…' : 'Empezar'}
             </button>
           </div>
         </div>
+      )}
+
+      {isAdmin && (
+        <p className="onb-admin">
+          <Link to="/admin">Ir al panel de usuarios</Link>
+        </p>
       )}
     </div>
   );
