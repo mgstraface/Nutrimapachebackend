@@ -98,7 +98,151 @@
   50% { transform: rotate(12deg); }
 }
 
+/* ---------------- interacciones ---------------- */
+.cachete-touch {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: pan-y;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.cachete-touch:focus-visible {
+  outline: 3px solid var(--lamp);
+  outline-offset: 4px;
+}
+
+.act-cosquillas .cachete-body {
+  transform-origin: 100px 208px;
+  animation: cachete-wiggle 0.22s ease-in-out 6;
+}
+.act-mimo .cachete-head {
+  animation: cachete-nod 0.9s ease-in-out 2;
+}
+.act-cinta .cachete-body {
+  transform-origin: 100px 18px;
+  animation: cachete-swing 1.4s ease-in-out 2;
+}
+.act-abrazo .cachete-body {
+  transform-origin: 100px 208px;
+  animation: cachete-squeeze 1.2s ease-in-out 2;
+}
+.act-baile .cachete-body {
+  transform-origin: 100px 208px;
+  animation: cachete-dance 0.5s ease-in-out 6;
+}
+.act-baile .arm-izq .cachete-arm-inner {
+  animation: cachete-arm-dance 0.5s ease-in-out 6;
+}
+.act-baile .arm-der .cachete-arm-inner {
+  animation: cachete-arm-dance 0.5s ease-in-out 0.25s 6;
+}
+.act-mareo .cachete-body {
+  transform-origin: 100px 208px;
+  animation: cachete-wobble 0.8s ease-in-out 4;
+}
+.eyes-spin path {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cachete-spin 0.9s linear infinite;
+}
+.act-choca-izq .cachete-body,
+.act-choca-der .cachete-body {
+  transform-origin: 100px 208px;
+  animation: cachete-hop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) 1;
+}
+
+.fx-hearts path {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fx-float 1.6s ease-out both;
+}
+.fx-star {
+  transform-origin: 100px 80px;
+  animation: cachete-pop 0.4s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.fx-orbit {
+  transform-origin: 100px 40px;
+  animation: cachete-spin 1.6s linear infinite;
+}
+.fx-notes text {
+  animation: fx-float 1.2s ease-out infinite;
+}
+.fx-notes text:last-child {
+  animation-delay: 0.5s;
+}
+.acc-envelope {
+  transform-origin: 157px 150px;
+  animation: env-bounce 1.6s ease-in-out infinite;
+}
+.acc-party {
+  transform-origin: 100px 46px;
+  animation: cachete-tilt 2.4s ease-in-out infinite;
+}
+.acc-confetti rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: confetti-fall 2.6s linear 3 both;
+}
+
+@keyframes cachete-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-4deg); }
+  75% { transform: rotate(4deg); }
+}
+@keyframes cachete-nod {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-6deg) translateY(2px); }
+  60% { transform: rotate(4deg); }
+}
+@keyframes cachete-swing {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(9deg); }
+  75% { transform: rotate(-9deg); }
+}
+@keyframes cachete-squeeze {
+  0%, 100% { transform: scale(1, 1); }
+  40% { transform: scale(1.06, 0.93); }
+  70% { transform: scale(0.98, 1.03); }
+}
+@keyframes cachete-dance {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-8px) rotate(-6deg); }
+  75% { transform: translateY(-8px) rotate(6deg); }
+}
+@keyframes cachete-arm-dance {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-35deg); }
+}
+@keyframes cachete-wobble {
+  0%, 100% { transform: rotate(0deg) translateX(0); }
+  25% { transform: rotate(-7deg) translateX(-4px); }
+  75% { transform: rotate(7deg) translateX(4px); }
+}
+@keyframes cachete-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes fx-float {
+  0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateY(-22px) scale(1); opacity: 0; }
+}
+@keyframes env-bounce {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-6px) rotate(4deg); }
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(240px) rotate(540deg); opacity: 0.2; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .acc-confetti,
+  .fx-orbit,
+  .eyes-spin path {
+    animation: none !important;
+  }
+
   .cachete-body,
   .cachete-wave,
   .cachete-blink,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import type { AdminUserRow } from '@nutrimapache/shared';
+import type { AdminUserRow, Note, SpecialDate, SpecialKind } from '@nutrimapache/shared';
 import { api, errorText } from '../../lib/api';
 import { useStore } from '../../lib/store';
 
@@ -149,6 +149,7 @@ function UserRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [password, setPassword] = useState('');
+  const [showExtras, setShowExtras] = useState(false);
 
   const last = u.lastMealAt ? new Date(u.lastMealAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) : null;
 
@@ -198,6 +199,9 @@ function UserRow({
           <button type="button" className="btn-quiet" onClick={() => setEditing(true)}>
             Cambiar contraseña
           </button>
+          <button type="button" className="btn-quiet" aria-expanded={showExtras} onClick={() => setShowExtras(!showExtras)}>
+            💌 Notitas y fechas
+          </button>
           {!isMe && (
             <>
               <button type="button" className="btn-quiet" onClick={onToggle}>
@@ -210,7 +214,157 @@ function UserRow({
           )}
         </div>
       )}
+      {showExtras && <UserExtras userId={u.id} name={u.displayName} />}
     </article>
+  );
+}
+
+const KIND_LABEL: Record<SpecialKind, string> = { cumple: 'Cumpleaños', aniversario: 'Aniversario', otro: 'Otro' };
+
+/** Notitas que Cachete le entrega y fechas especiales (se repiten cada año). */
+function UserExtras({ userId, name }: { userId: string; name: string }) {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [dates, setDates] = useState<SpecialDate[]>([]);
+  const [text, setText] = useState('');
+  const [deliverOn, setDeliverOn] = useState('');
+  const [date, setDate] = useState('');
+  const [label, setLabel] = useState('');
+  const [kind, setKind] = useState<SpecialKind>('cumple');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await api<{ notes: Note[]; dates: SpecialDate[] }>(`/admin/users/${userId}/extras`);
+      setNotes(r.notes);
+      setDates(r.dates);
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      await load();
+      return true;
+    } catch (err) {
+      setError(errorText(err));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fmt = (md: string) => {
+    const [m, d] = md.split('-');
+    return new Date(2000, Number(m) - 1, Number(d)).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
+  };
+
+  return (
+    <div className="user-extras">
+      {error && <p className="form-error">{error}</p>}
+
+      <h4>Notitas para {name}</h4>
+      <p className="hint">Cachete se la muestra con un sobrecito la próxima vez que abra la app (o desde el día que elijas).</p>
+      <label className="field">
+        <span>Mensaje</span>
+        <textarea rows={3} maxLength={600} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ej.: Estoy re orgulloso de vos 💛" />
+      </label>
+      <label className="field">
+        <span>Entregar a partir del (opcional)</span>
+        <input type="date" value={deliverOn} onChange={(e) => setDeliverOn(e.target.value)} />
+      </label>
+      <button
+        type="button"
+        className="btn-primary btn-small"
+        disabled={busy || !text.trim()}
+        onClick={async () => {
+          if (await run(() => api(`/admin/users/${userId}/notes`, { method: 'POST', body: { text: text.trim(), deliverOn: deliverOn || null } }))) {
+            setText('');
+            setDeliverOn('');
+          }
+        }}
+      >
+        Dejar notita
+      </button>
+      {notes.length > 0 && (
+        <ul className="extras-list">
+          {notes.map((n) => (
+            <li key={n.id}>
+              <span>
+                “{n.text.length > 80 ? `${n.text.slice(0, 80)}…` : n.text}”
+                <br />
+                <span className="hint">
+                  {n.openedAt
+                    ? `Leída el ${new Date(n.openedAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}`
+                    : n.deliverOn
+                      ? `Se entrega desde el ${new Date(`${n.deliverOn}T12:00:00`).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}`
+                      : 'Esperando que la abra'}
+                </span>
+              </span>
+              <button type="button" className="icon-btn" aria-label="Borrar notita" onClick={() => void run(() => api(`/admin/notes/${n.id}`, { method: 'DELETE' }))}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h4>Fechas especiales</h4>
+      <p className="hint">Ese día Cachete se pone el gorrito de fiesta y tira confeti. Se repite todos los años.</p>
+      <div className="extras-row">
+        <label className="field">
+          <span>Día</span>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Tipo</span>
+          <select value={kind} onChange={(e) => setKind(e.target.value as SpecialKind)}>
+            <option value="cumple">Cumpleaños</option>
+            <option value="aniversario">Aniversario</option>
+            <option value="otro">Otro</option>
+          </select>
+        </label>
+      </div>
+      <label className="field">
+        <span>Nombre</span>
+        <input value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} placeholder={kind === 'cumple' ? 'Cumple de Sara' : kind === 'aniversario' ? 'aniversario' : 'Día del…'} />
+      </label>
+      <button
+        type="button"
+        className="btn-primary btn-small"
+        disabled={busy || !date || !label.trim()}
+        onClick={async () => {
+          if (await run(() => api(`/admin/users/${userId}/dates`, { method: 'POST', body: { monthDay: date.slice(5), label: label.trim(), kind } }))) {
+            setDate('');
+            setLabel('');
+          }
+        }}
+      >
+        Agregar fecha
+      </button>
+      {dates.length > 0 && (
+        <ul className="extras-list">
+          {dates.map((d) => (
+            <li key={d.id}>
+              <span>
+                {fmt(d.monthDay)} · {d.label} <span className="hint">({KIND_LABEL[d.kind]})</span>
+              </span>
+              <button type="button" className="icon-btn" aria-label="Borrar fecha" onClick={() => void run(() => api(`/admin/dates/${d.id}`, { method: 'DELETE' }))}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

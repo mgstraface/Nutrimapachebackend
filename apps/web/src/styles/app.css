@@ -1057,3 +1057,270 @@ textarea {
 .sheet-foot .btn-quiet:only-child {
   flex: 1;
 }
+
+/* ---------- herramientas de Cachete (en el panel) ---------- */
+.den-tools {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 0 18px;
+}
+.den-tool {
+  position: relative;
+  min-height: 40px;
+  padding: 0 11px;
+  white-space: nowrap;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.den-tool.has-new::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--lamp);
+  box-shadow: 0 0 0 2px var(--dusk-2);
+}
+.den-offer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 16px;
+}
+.den-offer .btn-primary {
+  background: var(--lamp);
+  color: var(--ink);
+}
+.den-error {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 14px;
+}
+
+/* ---------- vestir ---------- */
+.look-preview {
+  display: grid;
+  place-items: center;
+  padding: 6px 0 2px;
+  background: linear-gradient(180deg, var(--dusk), var(--dusk-2));
+  border-radius: var(--radius-m);
+}
+.look-slot h3 {
+  font-size: var(--step-0);
+  margin: 4px 0 8px;
+}
+.look-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.look-item {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius-m);
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+}
+.look-item.is-on {
+  border-color: var(--lamp);
+  box-shadow: 0 0 0 3px var(--lamp-soft);
+}
+.look-item.is-locked {
+  opacity: 0.6;
+  background: var(--mist);
+}
+.look-emoji {
+  font-size: 1.5rem;
+}
+.look-how {
+  color: var(--ink-2);
+  font-size: 0.75rem;
+}
+
+/* ---------- ¿cómo estás? ---------- */
+.mood-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.mood-btn {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 12px 6px;
+  border-radius: var(--radius-m);
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+  font-weight: 700;
+}
+.mood-btn.is-on {
+  border-color: var(--dusk-2);
+  box-shadow: 0 0 0 3px rgba(90, 58, 154, 0.15);
+}
+.mood-emoji {
+  font-size: 1.75rem;
+}
+
+/* ---------- carta ---------- */
+.letter {
+  position: fixed;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: max(90px, 16vh);
+  width: min(340px, calc(100vw - 40px));
+  margin: 0 auto;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+  padding: 18px 20px 20px;
+  border-radius: var(--radius-l);
+  background:
+    repeating-linear-gradient(180deg, transparent 0 27px, rgba(184, 166, 234, 0.35) 27px 28px),
+    #fffdf7;
+  border: 2px solid #b8a6ea;
+  box-shadow: 0 20px 50px rgba(31, 27, 53, 0.35);
+}
+.letter-cachete {
+  margin-top: -64px;
+  background: linear-gradient(180deg, var(--dusk), var(--dusk-2));
+  border-radius: 50%;
+  padding: 6px 6px 0;
+}
+.letter-from {
+  margin: 0;
+  font-weight: 700;
+  color: var(--dusk-2);
+}
+.letter-text {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--step-1);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* ---------- respirar ---------- */
+.breath {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: calc(var(--safe-top) + 12px) 24px calc(var(--safe-bottom) + 28px);
+  background: radial-gradient(circle at 50% 35%, #3b3f9e 0, var(--dusk) 55%, #15184a 100%);
+  color: #fff;
+  text-align: center;
+}
+.breath-close {
+  justify-self: end;
+  color: #fff;
+}
+.breath-stage {
+  display: grid;
+  place-items: center;
+}
+.breath-text {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+}
+.breath-text p {
+  margin: 0;
+  max-width: 320px;
+}
+.breath-cue {
+  font-family: var(--font-display);
+  font-size: var(--step-2);
+  font-weight: 700;
+}
+.breath-text .btn-primary {
+  background: var(--lamp);
+  color: var(--ink);
+  min-width: 200px;
+}
+.breath-dots {
+  display: flex;
+  gap: 8px;
+}
+.breath-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+.breath-dots span.on {
+  background: var(--lamp);
+}
+.breath-dots span.now {
+  background: #fff;
+}
+
+/* ---------- notitas guardadas (Yo) ---------- */
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.notes-list li {
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+  background: #fffdf7;
+  border: 1px solid var(--line);
+}
+.notes-list p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* ---------- admin: notitas y fechas ---------- */
+.user-extras {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.user-extras h4 {
+  margin: 0;
+  font-size: var(--step-0);
+}
+.extras-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.extras-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: var(--mist);
+  font-size: var(--step--1);
+}
+.extras-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}

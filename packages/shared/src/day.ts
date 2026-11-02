@@ -40,11 +40,13 @@ export const dayLogSchema = z.object({
   energy: z.number().int().min(1).max(5).nullable().default(null),
   water: z.number().int().min(0).max(30).default(0),
   note: z.string().max(280).default(''),
+  /** ¿Cómo estás? (opcional) */
+  mood: z.enum(['contenta', 'tranqui', 'cansada', 'ansiosa', 'triste']).nullable().default(null),
 });
 export type DayLogInput = z.infer<typeof dayLogSchema>;
 export type DayLog = DayLogInput & { date: string; updatedAt?: string };
 
-export const emptyDay = (date: string): DayLog => ({ date, status: null, activities: [], energy: null, water: 0, note: '' });
+export const emptyDay = (date: string): DayLog => ({ date, status: null, activities: [], energy: null, water: 0, note: '', mood: null });
 
 /** Lo que tocaba según la rutina para esa fecha (o null si era día libre). */
 export function plannedFor(profile: Profile, date: Date) {

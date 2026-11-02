@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { GOAL_LABELS, estimateEnergy, formatRange, type BodySex, type Profile } from '@nutrimapache/shared';
-import { errorText } from '../../lib/api';
+import { GOAL_LABELS, estimateEnergy, formatRange, type BodySex, type Note, type Profile } from '@nutrimapache/shared';
+import { api, errorText } from '../../lib/api';
 import { useStore } from '../../lib/store';
 
 export function SettingsScreen() {
@@ -55,7 +55,17 @@ export function SettingsScreen() {
           />
         </label>
         <p className="hint">Siempre van a aparecer como rango aproximado, nunca como un número exacto.</p>
+        <label className="toggle">
+          <span>Soniditos de {profile.mascotName}</span>
+          <input
+            type="checkbox"
+            checked={profile.view.sound !== false}
+            onChange={(e) => void update({ ...profile, view: { ...profile.view, sound: e.target.checked } })}
+          />
+        </label>
       </section>
+
+      <SavedNotes />
 
       <section className="group">
         <h2>Fotos</h2>
@@ -195,6 +205,33 @@ function BodySection({ profile, onSave }: { profile: Profile; onSave: (p: Profil
       >
         {saved && !changed ? 'Guardado' : 'Guardar datos'}
       </button>
+    </section>
+  );
+}
+
+/** Las notitas que ya trajo Cachete, para releerlas. */
+function SavedNotes() {
+  const [notes, setNotes] = useState<Note[] | null>(null);
+  useEffect(() => {
+    api<Note[]>('/notes')
+      .then(setNotes)
+      .catch(() => setNotes([]));
+  }, []);
+  if (!notes || notes.length === 0) return null;
+  return (
+    <section className="group">
+      <h2>Tus notitas 💌</h2>
+      <ul className="notes-list">
+        {notes.map((n) => (
+          <li key={n.id}>
+            <p>{n.text}</p>
+            <p className="hint">
+              De {n.fromName}
+              {n.openedAt ? ` · ${new Date(n.openedAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })}` : ''}
+            </p>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

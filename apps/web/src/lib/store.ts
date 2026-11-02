@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { emptyDay, type AnalysisQuota, type DayLog, type Meal, type MealInput, type MascotEvent, type Profile, type SessionUser } from '@nutrimapache/shared';
+import { emptyDay, type AnalysisQuota, type DayLog, type Meal, type MealInput, type MascotEvent, type Moments, type Note, type Profile, type SessionUser } from '@nutrimapache/shared';
+import { setSoundEnabled } from './sound';
 import { ApiError, api } from './api';
 
 /**
@@ -24,6 +25,10 @@ interface State {
   /** Funciones con IA disponibles (hay clave en el servidor) y uso de hoy */
   ai: AnalysisQuota | null;
   refreshAi: () => Promise<void>;
+  /** Notitas por entregar y fechas especiales de hoy */
+  moments: Moments;
+  loadMoments: () => Promise<void>;
+  openNote: (id: string) => Promise<Note | null>;
   lastEvent: { event: MascotEvent; at: number } | null;
 
   boot: () => Promise<void>;
@@ -46,6 +51,19 @@ try {
   /* sin acceso a localStorage */
 }
 
+const DEFAULT_VIEW: Partial<Profile['view']> = { showCalories: false, showMacros: false };
+const DEFAULT_LOOK: Partial<Profile['look']> = { head: null, face: null, neck: null, ribbon: null };
+
+/** Perfiles guardados antes de que existieran algunos campos: se completan con valores por defecto. */
+const withDefaults = (p: Profile | null): Profile | null =>
+  p
+    ? {
+        ...p,
+        view: { ...(DEFAULT_VIEW as Profile['view']), ...p.view, sound: p.view?.sound ?? true },
+        look: { ...(DEFAULT_LOOK as Profile['look']), ...p.look, unlocked: p.look?.unlocked ?? [] },
+      }
+    : null;
+
 const sortMeals = (meals: Meal[]) =>
   [...meals].sort((a, b) => (a.date === b.date ? (a.time ?? '').localeCompare(b.time ?? '') : b.date.localeCompare(a.date)));
 
@@ -54,8 +72,10 @@ export const useStore = create<State>()((set, get) => {
     const from = localDate(new Date(Date.now() - 120 * 864e5));
     const [meals, dayList] = await Promise.all([api<Meal[]>('/meals'), api<DayLog[]>(`/days?from=${from}`)]);
     const days = Object.fromEntries(dayList.map((d) => [d.date, d]));
-    set({ status: 'ready', bootError: null, user: me.user, profile: me.profile, meals: sortMeals(meals), days });
+    set({ status: 'ready', bootError: null, user: me.user, profile: withDefaults(me.profile), meals: sortMeals(meals), days });
+    setSoundEnabled(me.profile?.view.sound !== false);
     void get().refreshAi();
+    void get().loadMoments();
   };
 
   return {
@@ -66,7 +86,22 @@ export const useStore = create<State>()((set, get) => {
     meals: [],
     days: {},
     ai: null,
+    moments: { notes: [], special: [] },
     lastEvent: null,
+
+    loadMoments: async () => {
+      try {
+        set({ moments: await api<Moments>('/moments') });
+      } catch {
+        /* sin momentos: no pasa nada */
+      }
+    },
+
+    openNote: async (id) => {
+      const note = await api<Note | null>(`/notes/${id}/open`, { method: 'POST' });
+      set((s) => ({ moments: { ...s.moments, notes: s.moments.notes.filter((n) => n.id !== id) } }));
+      return note;
+    },
 
     refreshAi: async () => {
       try {
@@ -102,7 +137,8 @@ export const useStore = create<State>()((set, get) => {
 
     saveProfile: async (p) => {
       const profile = await api<Profile>('/profile', { method: 'PUT', body: p });
-      set({ profile });
+      setSoundEnabled(profile.view.sound !== false);
+      set({ profile: withDefaults(profile) });
     },
 
     addMeal: async (input) => {

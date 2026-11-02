@@ -15,7 +15,19 @@ export type MascotEvent =
   | 'vuelta-tras-pausa'
   | 'agua-registrada'
   | 'descanso-elegido'
-  | 'caricia';
+  | 'caricia'
+  // Interacciones directas con Cachete
+  | 'mimo'
+  | 'cosquillas'
+  | 'choca'
+  | 'cinta'
+  | 'abrazo'
+  | 'baile'
+  | 'mareo'
+  | 'dormida'
+  | 'arropada'
+  | 'notita-abierta'
+  | 'desbloqueo';
 
 export interface MascotContext {
   event: MascotEvent;
@@ -59,9 +71,32 @@ export function mascotState(ctx: MascotContext, seed = Date.now()): MascotState 
       return { expression: 'acompañamiento', phrase: `¡Hola de nuevo, ${n}! ¿Arrancamos con lo que viene?` };
     case 'caricia':
       return pick<MascotState>([
-        { expression: 'alegria', phrase: '¡Jiji, cosquillas!' },
-        { expression: 'sorpresa', phrase: '¡Uy! Hola 👋' },
+        { expression: 'acompañamiento', phrase: `¡Hola, ${n}! 👋` },
+        { expression: 'sorpresa', phrase: '¡Uy! Me sorprendiste 👋' },
+        { expression: 'alegria', phrase: '¡Acá estoy!' },
       ], seed);
+    case 'mimo':
+      return { expression: 'alegria', phrase: pick(['Mmm, qué rico un mimo 💛', 'Ay, me encanta que me acaricies la cabeza.', 'Más, más… 🥰'], seed) };
+    case 'cosquillas':
+      return { expression: 'alegria', phrase: pick(['¡Jiji, cosquillas!', '¡Ja ja, ahí no! 🤭', '¡Basta que me hacés reír!'], seed) };
+    case 'choca':
+      return { expression: 'sorpresa', phrase: pick(['¡Chocá esos cinco! ✋', '¡Eso! Somos un equipo.', '¡Choque! ✨'], seed) };
+    case 'cinta':
+      return { expression: 'curiosidad', phrase: pick(['¡Uy, mi cintita! Me hacés hamacar.', 'Wiii, me balanceo 🎀', 'Cuidado que me colgás jiji.'], seed) };
+    case 'abrazo':
+      return { expression: 'alegria', phrase: pick([`Yo también te quiero, ${n} 💛`, 'Qué lindo abrazo. Me quedo acá un ratito.', 'Abrazo de oso… de muñeca 🤗'], seed) };
+    case 'baile':
+      return { expression: 'alegria', phrase: pick(['¡A bailar! 💃', '¡Pasito para acá, pasito para allá!', '¡Qué ritmo tenemos hoy!'], seed) };
+    case 'mareo':
+      return { expression: 'sorpresa', phrase: pick(['Wooo, me mareé 😵‍💫', '¡Todo da vueltas! Jiji.', 'Despacito que me mareo…'], seed) };
+    case 'dormida':
+      return { expression: 'descanso', phrase: pick(['Zzz… gracias por hamacarme…', 'Me quedé dormidita… 🌙', 'Shhh… sueño lindo…'], seed) };
+    case 'arropada':
+      return { expression: 'descanso', phrase: `Que descanses, ${n}. Mañana seguimos 🌙` };
+    case 'notita-abierta':
+      return { expression: 'alegria', phrase: pick(['¡Qué lindo mensaje! 💌', 'Te la guardo en tus notitas.'], seed) };
+    case 'desbloqueo':
+      return { expression: 'sorpresa', phrase: '¡Tengo algo nuevo para probarme! Tocá 👗' };
     case 'abrir-app':
     default: {
       if ((ctx.daysSinceLastLog ?? 0) >= 2) {
@@ -73,5 +108,33 @@ export function mascotState(ctx: MascotContext, seed = Date.now()): MascotState 
       if (ctx.hour < 19) return { expression: 'curiosidad', phrase: `¡Hola, ${n}! ¿Qué tal viene la tarde?` };
       return { expression: 'alegria', phrase: `¡Buenas, ${n}! ¿Cómo estuvo el día?` };
     }
+  }
+}
+
+/* ---------------- ¿Cómo estás? ---------------- */
+
+export const MOODS = [
+  { key: 'contenta', label: 'Contenta', emoji: '😊' },
+  { key: 'tranqui', label: 'Tranqui', emoji: '😌' },
+  { key: 'cansada', label: 'Cansada', emoji: '🥱' },
+  { key: 'ansiosa', label: 'Ansiosa', emoji: '😟' },
+  { key: 'triste', label: 'Bajoneada', emoji: '😔' },
+] as const;
+export type Mood = (typeof MOODS)[number]['key'];
+
+/** Cachete acompaña: no aconseja ni corrige, solo está. */
+export function moodReply(mood: Mood, displayName: string, seed = 0): MascotState & { offerBreath: boolean } {
+  switch (mood) {
+    case 'contenta':
+      return { expression: 'alegria', offerBreath: false, phrase: pick([`¡Qué lindo, ${displayName}! Me contagiás 💛`, '¡Eso me pone re contenta a mí también!'], seed) };
+    case 'tranqui':
+      return { expression: 'descanso', offerBreath: false, phrase: pick(['Qué bueno estar tranqui. Disfrutalo.', 'Me quedo acá con vos, tranquilas.'], seed) };
+    case 'cansada':
+      return { expression: 'acompañamiento', offerBreath: false, phrase: pick(['Hay días que cansan. Bajá un cambio cuando puedas.', 'Gracias por contarme. Un ratito de descanso te vendría bien.'], seed) };
+    case 'ansiosa':
+      return { expression: 'acompañamiento', offerBreath: true, phrase: pick(['Estoy acá. ¿Respiramos juntas un minuto?', 'Tranqui, de a poquito. Si querés, respiramos juntas.'], seed) };
+    case 'triste':
+    default:
+      return { expression: 'acompañamiento', offerBreath: true, phrase: pick([`Te mando un abrazo grande, ${displayName}. Estoy con vos.`, 'Gracias por contarme. No tenés que estar bien todo el tiempo 💛'], seed) };
   }
 }

@@ -63,6 +63,7 @@ const daySchema = new Schema(
     energy: { type: Number, default: null },
     water: { type: Number, default: 0 },
     note: { type: String, default: '' },
+    mood: { type: String, default: null },
   },
   { timestamps: true, minimize: false },
 );
@@ -86,6 +87,50 @@ const aiUsageSchema = new Schema(
 aiUsageSchema.index({ userId: 1, date: 1 });
 export const AiUsage = mongoose.model('AiUsage', aiUsageSchema);
 
+/* Notitas que deja el admin y Cachete entrega. */
+const noteSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, required: true },
+    fromName: { type: String, required: true },
+    text: { type: String, required: true },
+    deliverOn: { type: String, default: null },
+    openedAt: { type: Date, default: null },
+  },
+  { timestamps: true },
+);
+noteSchema.index({ userId: 1, openedAt: 1 });
+export const Note = mongoose.model('Note', noteSchema);
+
+/* Fechas especiales (se repiten cada año por "MM-DD"). */
+const specialDateSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, required: true },
+    monthDay: { type: String, required: true },
+    label: { type: String, required: true },
+    kind: { type: String, default: 'otro' },
+  },
+  { timestamps: true },
+);
+specialDateSchema.index({ userId: 1, monthDay: 1 });
+export const SpecialDate = mongoose.model('SpecialDate', specialDateSchema);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function toNote(doc: any) {
+  return {
+    id: String(doc._id),
+    text: doc.text,
+    fromName: doc.fromName,
+    deliverOn: doc.deliverOn ?? null,
+    openedAt: doc.openedAt ? new Date(doc.openedAt).toISOString() : null,
+    createdAt: new Date(doc.createdAt).toISOString(),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function toSpecial(doc: any) {
+  return { id: String(doc._id), monthDay: doc.monthDay, label: doc.label, kind: doc.kind ?? 'otro' };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function toDay(doc: any) {
   return {
@@ -95,6 +140,7 @@ export function toDay(doc: any) {
     energy: doc.energy ?? null,
     water: doc.water ?? 0,
     note: doc.note ?? '',
+    mood: doc.mood ?? null,
     updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : undefined,
   };
 }

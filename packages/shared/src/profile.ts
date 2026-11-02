@@ -45,7 +45,19 @@ export const GOAL_LABELS: Record<Goal, string> = {
 export const viewPrefsSchema = z.object({
   showCalories: z.boolean().default(false),
   showMacros: z.boolean().default(false),
+  /** Soniditos de Cachete */
+  sound: z.boolean().default(true),
 });
+
+/** Lo que tiene puesto Cachete y lo que ya desbloqueó (nunca se pierde). */
+export const lookSchema = z.object({
+  head: z.string().max(20).nullable().default(null),
+  face: z.string().max(20).nullable().default(null),
+  neck: z.string().max(20).nullable().default(null),
+  ribbon: z.string().max(20).nullable().default(null),
+  unlocked: z.array(z.string().max(20)).max(50).default([]),
+});
+export type Look = z.infer<typeof lookSchema>;
 
 export const consentsSchema = z.object({
   photoStorage: z.boolean().default(false),
@@ -72,6 +84,7 @@ export const profileSchema = z.object({
   view: viewPrefsSchema,
   consents: consentsSchema,
   mascotName: z.string().min(1).max(20).default('Cachete'),
+  look: lookSchema.default({}),
 });
 export type Profile = z.infer<typeof profileSchema>;
 

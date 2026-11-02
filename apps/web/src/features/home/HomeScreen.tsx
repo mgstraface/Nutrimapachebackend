@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { emptyDay, mascotState, plannedFor, summarizeDay, tipsFor, weekdayIndex, WEEKDAYS, type Meal } from '@nutrimapache/shared';
-import { Cachete } from '../../mascot/Cachete';
 import { errorText } from '../../lib/api';
+import { play } from '../../lib/sound';
 import { localDate, useStore } from '../../lib/store';
 import { useOpenMealSheet } from '../meals/registerContext';
 import { DaySheet } from '../day/DaySheet';
 import { InspirationSheet } from '../inspiration/InspirationSheet';
+import { CacheteStage } from '../cachete/CacheteStage';
 
 const EVENT_TTL = 6000;
 
@@ -53,7 +53,10 @@ export function HomeScreen() {
       const water = Math.max(0, Math.min(30, day.water + delta));
       if (water === day.water) return;
       const p = saveDay(today, { water });
-      if (delta > 0) emit('agua-registrada');
+      if (delta > 0) {
+        emit('agua-registrada');
+        play('agua');
+      }
       await p;
     } catch (err) {
       setDayError(errorText(err));
@@ -100,22 +103,7 @@ export function HomeScreen() {
           </button>
         </div>
 
-        <div className="den-stage">
-          <AnimatePresence mode="wait">
-            <motion.p
-              key={mood.phrase}
-              className="bubble"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.22 }}
-              aria-live="polite"
-            >
-              {mood.phrase}
-            </motion.p>
-          </AnimatePresence>
-          <Cachete expression={mood.expression} size={176} label={profile.mascotName} onPet={() => emit('caricia')} />
-        </div>
+        <CacheteStage base={mood} baseIsEvent={!!active} today={today} day={day} now={now} />
       </section>
 
       <section className="day" aria-labelledby="day-title">

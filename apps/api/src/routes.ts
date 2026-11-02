@@ -9,7 +9,9 @@ import {
   inspirationRequestSchema,
   loginSchema,
   mealTarget,
+  noteInputSchema,
   photoAnalysisRequestSchema,
+  specialDateInputSchema,
   plannedFor,
   type Profile as ProfileData,
   mealInputSchema,
@@ -31,7 +33,7 @@ import {
 import { AnalysisError, analyzePhoto, generateIdeas, todayAR } from './analysis';
 import { dbReady } from './config/db';
 import { env } from './config/env';
-import { AiUsage, Day, Meal, Profile, User, toDay, toMeal, toSessionUser } from './models';
+import { AiUsage, Day, Meal, Note, Profile, SpecialDate, User, toDay, toMeal, toNote, toSessionUser, toSpecial } from './models';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
@@ -39,6 +41,13 @@ const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => 
 };
 
 const oid = (id: string) => (Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : null);
+
+/** Perfiles guardados con versiones viejas: se completan con los valores por defecto nuevos. */
+const normalizeProfile = (data: unknown) => {
+  if (!data) return null;
+  const parsed = profileSchema.safeParse(data);
+  return parsed.success ? parsed.data : data;
+};
 
 export function apiRouter(): Router {
   const r = Router();
@@ -72,7 +81,7 @@ export function apiRouter(): Router {
       loginOk(key);
       await startSession(res, String(user._id));
       const profile = await Profile.findOne({ userId: user._id }).lean();
-      res.json({ user: toSessionUser(user), profile: profile?.data ?? null });
+      res.json({ user: toSessionUser(user), profile: normalizeProfile(profile?.data) });
     }),
   );
 
@@ -89,7 +98,7 @@ export function apiRouter(): Router {
     requireUser,
     h(async (req, res) => {
       const profile = await Profile.findOne({ userId: req.user!.id }).lean();
-      res.json({ user: req.user, profile: profile?.data ?? null });
+      res.json({ user: req.user, profile: normalizeProfile(profile?.data) });
     }),
   );
 
@@ -282,6 +291,45 @@ export function apiRouter(): Router {
     }),
   );
 
+  /* ---------------- momentos: notitas y fechas especiales ---------------- */
+
+  r.get(
+    '/moments',
+    requireUser,
+    h(async (req, res) => {
+      const today = todayAR();
+      const [notes, special] = await Promise.all([
+        Note.find({ userId: req.user!.id, openedAt: null, $or: [{ deliverOn: null }, { deliverOn: { $lte: today } }] })
+          .sort({ createdAt: 1 })
+          .lean(),
+        SpecialDate.find({ userId: req.user!.id, monthDay: today.slice(5) }).lean(),
+      ]);
+      res.json({ notes: notes.map(toNote), special: special.map(toSpecial) });
+    }),
+  );
+
+  /** Notitas ya abiertas, para releerlas. */
+  r.get(
+    '/notes',
+    requireUser,
+    h(async (req, res) => {
+      const notes = await Note.find({ userId: req.user!.id, openedAt: { $ne: null } }).sort({ openedAt: -1 }).limit(200).lean();
+      res.json(notes.map(toNote));
+    }),
+  );
+
+  r.post(
+    '/notes/:id/open',
+    requireUser,
+    h(async (req, res) => {
+      const id = oid(req.params.id!);
+      const doc = id
+        ? await Note.findOneAndUpdate({ _id: id, userId: req.user!.id, openedAt: null }, { $set: { openedAt: new Date() } }, { new: true }).lean()
+        : null;
+      res.json(doc ? toNote(doc) : null);
+    }),
+  );
+
   /* ---------------- privacidad ---------------- */
 
   r.get(
@@ -301,6 +349,7 @@ export function apiRouter(): Router {
         profile: profile?.data ?? null,
         meals: meals.map(toMeal),
         days: days.map(toDay),
+        notes: (await Note.find({ userId: req.user!.id, openedAt: { $ne: null } }).lean()).map(toNote),
       });
     }),
   );
@@ -414,10 +463,81 @@ export function apiRouter(): Router {
         Meal.deleteMany({ userId: id }),
         Day.deleteMany({ userId: id }),
         AiUsage.deleteMany({ userId: id }),
+        Note.deleteMany({ userId: id }),
+        SpecialDate.deleteMany({ userId: id }),
         Profile.deleteOne({ userId: id }),
         endAllSessions(String(id)),
         User.deleteOne({ _id: id }),
       ]);
+      res.status(204).end();
+    }),
+  );
+
+  /* ---------------- admin: notitas y fechas de cada usuaria ---------------- */
+
+  r.get(
+    '/admin/users/:id/extras',
+    requireAdmin,
+    h(async (req, res) => {
+      const id = oid(req.params.id!);
+      if (!id) {
+        res.status(404).json({ error: 'No encontramos ese usuario' });
+        return;
+      }
+      const [notes, dates] = await Promise.all([
+        Note.find({ userId: id }).sort({ createdAt: -1 }).limit(100).lean(),
+        SpecialDate.find({ userId: id }).sort({ monthDay: 1 }).lean(),
+      ]);
+      res.json({ notes: notes.map(toNote), dates: dates.map(toSpecial) });
+    }),
+  );
+
+  r.post(
+    '/admin/users/:id/notes',
+    requireAdmin,
+    h(async (req, res) => {
+      const id = oid(req.params.id!);
+      if (!id || !(await User.exists({ _id: id }))) {
+        res.status(404).json({ error: 'No encontramos ese usuario' });
+        return;
+      }
+      const data = noteInputSchema.parse(req.body);
+      const doc = await Note.create({ userId: id, fromName: req.user!.displayName, text: data.text, deliverOn: data.deliverOn });
+      res.status(201).json(toNote(doc.toObject()));
+    }),
+  );
+
+  r.delete(
+    '/admin/notes/:id',
+    requireAdmin,
+    h(async (req, res) => {
+      const id = oid(req.params.id!);
+      if (id) await Note.deleteOne({ _id: id });
+      res.status(204).end();
+    }),
+  );
+
+  r.post(
+    '/admin/users/:id/dates',
+    requireAdmin,
+    h(async (req, res) => {
+      const id = oid(req.params.id!);
+      if (!id || !(await User.exists({ _id: id }))) {
+        res.status(404).json({ error: 'No encontramos ese usuario' });
+        return;
+      }
+      const data = specialDateInputSchema.parse(req.body);
+      const doc = await SpecialDate.create({ userId: id, ...data });
+      res.status(201).json(toSpecial(doc.toObject()));
+    }),
+  );
+
+  r.delete(
+    '/admin/dates/:id',
+    requireAdmin,
+    h(async (req, res) => {
+      const id = oid(req.params.id!);
+      if (id) await SpecialDate.deleteOne({ _id: id });
       res.status(204).end();
     }),
   );

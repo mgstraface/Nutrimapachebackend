@@ -11,7 +11,8 @@ export interface ProfileTemplate {
   profile: Omit<Profile, 'displayName' | 'consents'>;
 }
 
-const DEFAULT_VIEW = { showCalories: false, showMacros: false };
+const DEFAULT_VIEW = { showCalories: false, showMacros: false, sound: true };
+const DEFAULT_LOOK = { head: null, face: null, neck: null, ribbon: null, unlocked: [] as string[] };
 
 export const FOUR_MEALS = [
   { key: 'desayuno', label: 'Desayuno', time: '07:30', emoji: '☕' },
@@ -45,6 +46,7 @@ export const PROFILE_TEMPLATES: ProfileTemplate[] = [
       ],
       view: DEFAULT_VIEW,
       mascotName: 'Cachete',
+      look: DEFAULT_LOOK,
     },
   },
   {
@@ -58,6 +60,7 @@ export const PROFILE_TEMPLATES: ProfileTemplate[] = [
       routine: Array.from({ length: 7 }, () => ({ trainingKey: null, moment: null })),
       view: DEFAULT_VIEW,
       mascotName: 'Cachete',
+      look: DEFAULT_LOOK,
     },
   },
 ];
