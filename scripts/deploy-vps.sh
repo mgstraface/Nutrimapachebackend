@@ -35,9 +35,16 @@ command -v openssl >/dev/null || die "Falta openssl"
 
 if [ -d "$APP_DIR/.git" ]; then
   say "Actualizando código ($BRANCH)"
+  BEFORE="$(git -C "$APP_DIR" rev-parse HEAD)"
   git -C "$APP_DIR" fetch --quiet origin "$BRANCH"
   git -C "$APP_DIR" checkout --quiet "$BRANCH"
   git -C "$APP_DIR" pull --ff-only --quiet origin "$BRANCH"
+  # Si el pull trajo una versión nueva de este script, se relanza con ella
+  # (bash ya tenía cargada la vieja y seguiría con esa).
+  if [ -z "${DEPLOY_RELAUNCHED:-}" ] && [ "$BEFORE" != "$(git -C "$APP_DIR" rev-parse HEAD)" ]; then
+    export DEPLOY_RELAUNCHED=1
+    exec bash "$APP_DIR/scripts/deploy-vps.sh" "$@"
+  fi
 else
   say "Clonando el repo"
   mkdir -p "$BASE_DIR"
