@@ -56,6 +56,26 @@ export function SettingsScreen() {
       </section>
 
       <section className="group">
+        <h2>Fotos</h2>
+        <label className="toggle">
+          <span>Analizar fotos de comidas con IA</span>
+          <input
+            type="checkbox"
+            checked={profile.consents.aiAnalysis}
+            onChange={(e) =>
+              void update({
+                ...profile,
+                consents: { ...profile.consents, aiAnalysis: e.target.checked, acceptedAt: e.target.checked ? new Date().toISOString() : profile.consents.acceptedAt },
+              })
+            }
+          />
+        </label>
+        <p className="hint">
+          La foto se envía achicada y sin datos tuyos a Claude (Anthropic) para reconocer los ingredientes. No se guarda: se analiza y se descarta.
+        </p>
+      </section>
+
+      <section className="group">
         <h2>Tus datos</h2>
         <p className="hint">Se guardan en tu cuenta, así los ves desde cualquier dispositivo. Solo vos podés verlos.</p>
         {/* Descarga directa: el servidor responde el archivo con la cookie de sesión */}

@@ -12,7 +12,10 @@ export function createApp() {
   // para leer la IP real en el freno de intentos de login.
   app.set('trust proxy', 'loopback, uniquelocal');
   app.use(helmet());
-  app.use(express.json({ limit: '200kb' }));
+  // La foto para analizar viaja en el body (ya achicada, ~200-600 KB en base64); el resto, chico.
+  const bigJson = express.json({ limit: '5mb' });
+  const smallJson = express.json({ limit: '200kb' });
+  app.use((req, res, next) => (req.path === '/api/v1/analysis/photo' ? bigJson(req, res, next) : smallJson(req, res, next)));
   app.use(cookieParser());
   app.use(loadUser);
 

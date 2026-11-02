@@ -19,6 +19,10 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(409).json({ error: 'Ese dato ya existe' });
     return;
   }
+  if (err?.type === 'entity.too.large') {
+    res.status(413).json({ error: 'La foto es muy pesada. Probá con otra.' });
+    return;
+  }
   if (err?.type === 'entity.parse.failed') {
     res.status(400).json({ error: 'Datos inválidos' });
     return;

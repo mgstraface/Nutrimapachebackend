@@ -5,6 +5,7 @@ import {
   createUserSchema,
   dayLogSchema,
   loginSchema,
+  photoAnalysisRequestSchema,
   mealInputSchema,
   profileSchema,
   updateUserSchema,
@@ -21,8 +22,10 @@ import {
   startSession,
   verifyPassword,
 } from './auth';
+import { AnalysisError, analyzePhoto, todayAR } from './analysis';
 import { dbReady } from './config/db';
-import { Day, Meal, Profile, User, toDay, toMeal, toSessionUser } from './models';
+import { env } from './config/env';
+import { AiUsage, Day, Meal, Profile, User, toDay, toMeal, toSessionUser } from './models';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
@@ -180,6 +183,50 @@ export function apiRouter(): Router {
     }),
   );
 
+  /* ---------------- análisis de fotos con IA ---------------- */
+
+  r.get(
+    '/analysis/quota',
+    requireUser,
+    h(async (req, res) => {
+      const usedToday = await AiUsage.countDocuments({ userId: req.user!.id, date: todayAR() });
+      res.json({ enabled: !!env.ANTHROPIC_API_KEY && env.AI_DAILY_LIMIT > 0, usedToday, dailyLimit: env.AI_DAILY_LIMIT });
+    }),
+  );
+
+  r.post(
+    '/analysis/photo',
+    requireUser,
+    h(async (req, res) => {
+      const profile = await Profile.findOne({ userId: req.user!.id }).lean();
+      const consents = (profile?.data as { consents?: { aiAnalysis?: boolean } } | undefined)?.consents;
+      if (!consents?.aiAnalysis) {
+        res.status(409).json({ error: 'Primero tenés que aceptar el análisis de fotos.' });
+        return;
+      }
+      const date = todayAR();
+      const used = await AiUsage.countDocuments({ userId: req.user!.id, date });
+      if (used >= env.AI_DAILY_LIMIT) {
+        res.status(429).json({ error: `Por hoy ya analizamos ${env.AI_DAILY_LIMIT} fotos. Mañana seguimos; mientras, podés anotar a mano.` });
+        return;
+      }
+      const input = photoAnalysisRequestSchema.parse(req.body);
+      try {
+        const { analysis, usage } = await analyzePhoto(input);
+        await AiUsage.create({ userId: req.user!.id, date, model: env.AI_MODEL, ...usage, ok: true });
+        res.json(analysis);
+      } catch (err) {
+        if (err instanceof AnalysisError) {
+          // Los intentos fallidos también cuentan para el tope (protege el gasto), salvo que falte la clave.
+          if (err.status !== 503 || env.ANTHROPIC_API_KEY) await AiUsage.create({ userId: req.user!.id, date, model: env.AI_MODEL, ok: false });
+          res.status(err.status).json({ error: err.message });
+          return;
+        }
+        throw err;
+      }
+    }),
+  );
+
   /* ---------------- privacidad ---------------- */
 
   r.get(
@@ -311,6 +358,7 @@ export function apiRouter(): Router {
       await Promise.all([
         Meal.deleteMany({ userId: id }),
         Day.deleteMany({ userId: id }),
+        AiUsage.deleteMany({ userId: id }),
         Profile.deleteOne({ userId: id }),
         endAllSessions(String(id)),
         User.deleteOne({ _id: id }),

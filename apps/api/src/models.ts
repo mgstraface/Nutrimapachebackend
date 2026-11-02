@@ -69,6 +69,21 @@ const daySchema = new Schema(
 daySchema.index({ userId: 1, date: -1 }, { unique: true });
 export const Day = mongoose.model('Day', daySchema);
 
+/* Uso de IA: solo contadores para el tope diario y para saber cuánto se gasta. Nunca la foto. */
+const aiUsageSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, required: true },
+    date: { type: String, required: true },
+    model: String,
+    inputTokens: { type: Number, default: 0 },
+    outputTokens: { type: Number, default: 0 },
+    ok: { type: Boolean, default: false },
+  },
+  { timestamps: true },
+);
+aiUsageSchema.index({ userId: 1, date: 1 });
+export const AiUsage = mongoose.model('AiUsage', aiUsageSchema);
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function toDay(doc: any) {
   return {

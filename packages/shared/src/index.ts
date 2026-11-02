@@ -6,3 +6,4 @@ export * from './templates';
 export * from './auth';
 export * from './day';
 export * from './tips';
+export * from './analysis';
