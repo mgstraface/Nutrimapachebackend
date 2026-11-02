@@ -24,12 +24,33 @@ Para probar en el iPhone: abrir `http://<ip-de-tu-compu>:5173` en Safari desde l
 
 ## Producción (VPS)
 
+Corre en el mismo VPS que Casa Roma y el robot. El nginx del VPS es el único que atiende los dominios y el HTTPS; cada proyecto publica sus contenedores solo en `127.0.0.1`, en puertos propios.
+
+| Proyecto | Carpeta en el VPS | Web | Mongo |
+|---|---|---|---|
+| Robot (prod) | `/root/robot` | `127.0.0.1:8090` | `127.0.0.1:27020` |
+| Robot (pruebas) | `/root/robot-dev` | `127.0.0.1:8091` | `127.0.0.1:27021` |
+| NutriMapache | `/root/nutrimapache/app` | `127.0.0.1:8092` | `127.0.0.1:27022` |
+| Casa Roma | `/root/casa_roma` | — | — |
+
+Primera vez, en el VPS:
+
 ```bash
-cp .env.example .env    # completar DOMAIN y JWT_SECRET
-docker compose up -d --build
+git clone git@github.com:mgstraface/Nutrimapachebackend.git /root/nutrimapache/app
+bash /root/nutrimapache/app/scripts/deploy-vps.sh   # crea el .env y se frena
+nano /root/nutrimapache/app/.env                    # completar DOMAIN
+bash /root/nutrimapache/app/scripts/deploy-vps.sh   # levanta, crea el sitio de nginx y pide HTTPS
 ```
 
-Caddy saca el certificado HTTPS solo. En el iPhone: Safari → Compartir → **Agregar a inicio**.
+Después, cada push a `main` despliega solo (`.github/workflows/deploy.yml`). Secrets del repo: `VPS_HOST`, `VPS_PORT`, `VPS_USER` y `VPS_SSH_KEY`, con una **clave SSH nueva y propia** de este proyecto, restringida en `authorized_keys` del VPS:
+
+```
+command="bash /root/nutrimapache/app/scripts/deploy-vps.sh",no-port-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... nutrimapache-deploy
+```
+
+No reusar la clave del robot ni la de Casa Roma: una clave con `command=` corre siempre ese script, sin importar qué repo la use.
+
+En el iPhone: Safari → Compartir → **Agregar a inicio**.
 
 ## Estado
 

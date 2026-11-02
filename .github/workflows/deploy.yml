@@ -1,0 +1,28 @@
+name: Deploy NutriMapache al VPS
+
+# Cada push a main se despliega solo. También se puede correr a mano desde Actions.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: nutrimapache-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Deploy por SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          # Clave PROPIA de NutriMapache, restringida con command= a scripts/deploy-vps.sh.
+          # No usar la del robot ni la de Casa Roma.
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 20m
+          script: bash /root/nutrimapache/app/scripts/deploy-vps.sh

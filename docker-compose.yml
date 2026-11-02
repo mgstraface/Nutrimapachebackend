@@ -1,44 +1,52 @@
-# Producción en el VPS: docker compose up -d --build
+# NutriMapache en el VPS compartido (convive con Casa Roma y el robot).
+#
+# Reglas para no pisar a los otros proyectos:
+#   - Nunca publica 80/443: el nginx del VPS es el único que atiende el dominio y hace HTTPS.
+#   - Solo publica puertos en 127.0.0.1, con números propios (WEB_PORT, MONGO_PORT).
+#   - Nombre de proyecto, contenedores y volúmenes con prefijo propio (STACK).
+#
+# Lo levanta scripts/deploy-vps.sh. A mano: docker compose up -d --build
+
+name: ${STACK:-nutrimapache}
+
 services:
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    restart: unless-stopped
+    container_name: ${STACK:-nutrimapache}-web
     ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN}
-    volumes:
-      - caddy_data:/data
-      - caddy_config:/config
+      - "127.0.0.1:${WEB_PORT:-8092}:80"
     depends_on:
       - api
+    restart: unless-stopped
 
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    restart: unless-stopped
+    container_name: ${STACK:-nutrimapache}-api
     env_file: .env
     environment:
       NODE_ENV: production
+      PORT: 4000
       MONGO_URL: mongodb://mongo:27017/nutrimapache
     volumes:
       - uploads:/app/uploads
     depends_on:
       - mongo
+    restart: unless-stopped
 
   mongo:
     image: mongo:7
-    restart: unless-stopped
-    # Sin puertos expuestos: solo la API llega a la base.
+    container_name: ${STACK:-nutrimapache}-mongo
+    # Solo desde el propio VPS. Desde tu PC: ssh -N -L 27022:127.0.0.1:27022 root@<vps>
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27022}:27017"
     volumes:
       - mongo_data:/data/db
+    restart: unless-stopped
 
 volumes:
-  caddy_data:
-  caddy_config:
   uploads:
   mongo_data:
