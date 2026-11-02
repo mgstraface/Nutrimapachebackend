@@ -1,8 +1,9 @@
 name: Deploy NutriMapache al VPS
 
-# Por ahora solo a mano (Actions → Run workflow) hasta tener dominio, clave SSH y secrets.
-# Cuando esté todo listo, sumar:  push: { branches: [main] }
+# Cada push a main se despliega solo. También se puede correr a mano desde Actions → Run workflow.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
