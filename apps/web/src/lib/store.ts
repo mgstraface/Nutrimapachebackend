@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { emptyDay, type DayLog, type Meal, type MealInput, type MascotEvent, type Profile, type SessionUser } from '@nutrimapache/shared';
+import { emptyDay, type AnalysisQuota, type DayLog, type Meal, type MealInput, type MascotEvent, type Profile, type SessionUser } from '@nutrimapache/shared';
 import { ApiError, api } from './api';
 
 /**
@@ -21,6 +21,9 @@ interface State {
   meals: Meal[];
   /** Días anotados (actividad, energía, agua), por fecha "YYYY-MM-DD" */
   days: Record<string, DayLog>;
+  /** Funciones con IA disponibles (hay clave en el servidor) y uso de hoy */
+  ai: AnalysisQuota | null;
+  refreshAi: () => Promise<void>;
   lastEvent: { event: MascotEvent; at: number } | null;
 
   boot: () => Promise<void>;
@@ -52,6 +55,7 @@ export const useStore = create<State>()((set, get) => {
     const [meals, dayList] = await Promise.all([api<Meal[]>('/meals'), api<DayLog[]>(`/days?from=${from}`)]);
     const days = Object.fromEntries(dayList.map((d) => [d.date, d]));
     set({ status: 'ready', bootError: null, user: me.user, profile: me.profile, meals: sortMeals(meals), days });
+    void get().refreshAi();
   };
 
   return {
@@ -61,7 +65,16 @@ export const useStore = create<State>()((set, get) => {
     profile: null,
     meals: [],
     days: {},
+    ai: null,
     lastEvent: null,
+
+    refreshAi: async () => {
+      try {
+        set({ ai: await api<AnalysisQuota>('/analysis/quota') });
+      } catch {
+        set({ ai: null });
+      }
+    },
 
     boot: async () => {
       set({ status: 'loading', bootError: null });

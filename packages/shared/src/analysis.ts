@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { mealItemSchema } from './meal';
+import { rangeSchema, type Range } from './range';
 
 /** Lo que manda la app: la foto ya achicada en el celular (JPEG en base64, sin metadatos). */
 export const photoAnalysisRequestSchema = z.object({
@@ -29,4 +30,31 @@ export interface AnalysisQuota {
   enabled: boolean;
   usedToday: number;
   dailyLimit: number;
+}
+
+/* ---------------- Inspiración: ideas de comidas ---------------- */
+
+export const inspirationRequestSchema = z.object({
+  slotKey: z.string().min(1).max(24),
+  /** Nombres de ideas ya mostradas, para no repetir al pedir otras */
+  exclude: z.array(z.string().max(80)).max(12).default([]),
+});
+export type InspirationRequest = z.infer<typeof inspirationRequestSchema>;
+
+export const mealIdeaSchema = z.object({
+  title: z.string().max(80),
+  description: z.string().max(200),
+  items: z.array(mealItemSchema).max(12),
+  kcal: rangeSchema.optional(),
+  protein: rangeSchema.optional(),
+  prepMinutes: z.number().int().min(0).max(240).optional(),
+  tags: z.array(z.string().max(20)).max(4).default([]),
+});
+export type MealIdea = z.infer<typeof mealIdeaSchema>;
+
+export interface InspirationResponse {
+  slotLabel: string;
+  /** Objetivo orientativo de esa comida (si hay datos para calcularlo) */
+  target: { kcal: Range; protein: Range } | null;
+  ideas: MealIdea[];
 }

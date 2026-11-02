@@ -13,8 +13,8 @@ const envSchema = z.object({
   /** Análisis de fotos: la clave vive solo en el servidor, nunca en el frontend. Sin clave, la función queda apagada. */
   ANTHROPIC_API_KEY: z.string().optional().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   AI_MODEL: z.string().default('claude-haiku-5-5'),
-  /** Tope de análisis por persona por día, para que el gasto no se dispare */
-  AI_DAILY_LIMIT: z.coerce.number().int().min(0).default(15),
+  /** Tope de consultas a la IA (fotos + ideas) por persona por día, para que el gasto no se dispare */
+  AI_DAILY_LIMIT: z.coerce.number().int().min(0).default(25),
 });
 
 export const env = envSchema.parse(process.env);

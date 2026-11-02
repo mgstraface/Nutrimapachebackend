@@ -3,9 +3,15 @@ import { Types } from 'mongoose';
 import {
   PROFILE_TEMPLATES,
   createUserSchema,
+  GOAL_LABELS,
   dayLogSchema,
+  estimateEnergy,
+  inspirationRequestSchema,
   loginSchema,
+  mealTarget,
   photoAnalysisRequestSchema,
+  plannedFor,
+  type Profile as ProfileData,
   mealInputSchema,
   profileSchema,
   updateUserSchema,
@@ -22,7 +28,7 @@ import {
   startSession,
   verifyPassword,
 } from './auth';
-import { AnalysisError, analyzePhoto, todayAR } from './analysis';
+import { AnalysisError, analyzePhoto, generateIdeas, todayAR } from './analysis';
 import { dbReady } from './config/db';
 import { env } from './config/env';
 import { AiUsage, Day, Meal, Profile, User, toDay, toMeal, toSessionUser } from './models';
@@ -207,18 +213,67 @@ export function apiRouter(): Router {
       const date = todayAR();
       const used = await AiUsage.countDocuments({ userId: req.user!.id, date });
       if (used >= env.AI_DAILY_LIMIT) {
-        res.status(429).json({ error: `Por hoy ya analizamos ${env.AI_DAILY_LIMIT} fotos. Mañana seguimos; mientras, podés anotar a mano.` });
+        res.status(429).json({ error: 'Por hoy ya usamos todas las consultas a la IA. Mañana seguimos; mientras, podés anotar a mano.' });
         return;
       }
       const input = photoAnalysisRequestSchema.parse(req.body);
       try {
         const { analysis, usage } = await analyzePhoto(input);
-        await AiUsage.create({ userId: req.user!.id, date, model: env.AI_MODEL, ...usage, ok: true });
+        await AiUsage.create({ userId: req.user!.id, date, kind: 'foto', model: env.AI_MODEL, ...usage, ok: true });
         res.json(analysis);
       } catch (err) {
         if (err instanceof AnalysisError) {
           // Los intentos fallidos también cuentan para el tope (protege el gasto), salvo que falte la clave.
-          if (err.status !== 503 || env.ANTHROPIC_API_KEY) await AiUsage.create({ userId: req.user!.id, date, model: env.AI_MODEL, ok: false });
+          if (err.status !== 503 || env.ANTHROPIC_API_KEY) await AiUsage.create({ userId: req.user!.id, date, kind: 'foto', model: env.AI_MODEL, ok: false });
+          res.status(err.status).json({ error: err.message });
+          return;
+        }
+        throw err;
+      }
+    }),
+  );
+
+  /** Ideas de comidas para un momento del día, ajustadas al rango orientativo de esa comida. */
+  r.post(
+    '/inspiration',
+    requireUser,
+    h(async (req, res) => {
+      const { slotKey, exclude } = inspirationRequestSchema.parse(req.body);
+      const doc = await Profile.findOne({ userId: req.user!.id }).lean();
+      const profile = doc?.data as ProfileData | undefined;
+      if (!profile) {
+        res.status(409).json({ error: 'Primero armá tu perfil.' });
+        return;
+      }
+      const date = todayAR();
+      const used = await AiUsage.countDocuments({ userId: req.user!.id, date });
+      if (used >= env.AI_DAILY_LIMIT) {
+        res.status(429).json({ error: 'Por hoy ya usamos todas las consultas a la IA. Mañana seguimos.' });
+        return;
+      }
+      const slot = profile.mealSlots.find((s) => s.key === slotKey);
+      const slotLabel = slot?.label ?? 'Comida';
+      const energy = estimateEnergy(profile);
+      const target = energy ? mealTarget(profile, slotKey, energy) : null;
+      const dayLog = await Day.findOne({ userId: req.user!.id, date }).lean();
+      const trainedToday =
+        dayLog?.status === 'como-plan' || dayLog?.status === 'distinto' || (!dayLog?.status && !!plannedFor(profile, new Date()));
+      const vianda = /vianda/i.test(profile.workContext ?? '') && /almuerzo/i.test(`${slotKey} ${slotLabel}`);
+      try {
+        const { ideas, usage } = await generateIdeas({
+          slotLabel,
+          time: slot?.time ?? '',
+          goalLabel: GOAL_LABELS[profile.goal],
+          target,
+          vianda,
+          trainedToday,
+          exclude,
+        });
+        await AiUsage.create({ userId: req.user!.id, date, kind: 'ideas', model: env.AI_MODEL, ...usage, ok: true });
+        res.json({ slotLabel, target, ideas });
+      } catch (err) {
+        if (err instanceof AnalysisError) {
+          if (err.status !== 503 || env.ANTHROPIC_API_KEY) await AiUsage.create({ userId: req.user!.id, date, kind: 'ideas', model: env.AI_MODEL, ok: false });
           res.status(err.status).json({ error: err.message });
           return;
         }

@@ -1,4 +1,14 @@
-import { foodGroupSchema, photoAnalysisSchema, type MealItem, type PhotoAnalysis, type PhotoAnalysisRequest } from '@nutrimapache/shared';
+import {
+  foodGroupSchema,
+  mealIdeaSchema,
+  photoAnalysisSchema,
+  sumRanges,
+  type MealIdea,
+  type MealItem,
+  type PhotoAnalysis,
+  type PhotoAnalysisRequest,
+  type Range,
+} from '@nutrimapache/shared';
 import { env } from './config/env';
 
 /**
@@ -104,15 +114,19 @@ function toItem(r: RawItem): MealItem | null {
   };
 }
 
-export interface AnalysisResult {
-  analysis: PhotoAnalysis;
-  usage: { inputTokens: number; outputTokens: number };
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
 }
 
-export async function analyzePhoto(req: PhotoAnalysisRequest): Promise<AnalysisResult> {
-  if (!env.ANTHROPIC_API_KEY) throw new AnalysisError(503, 'El análisis con foto todavía no está configurado.');
-
-  const userText = req.slotLabel ? `Foto de: ${req.slotLabel}.` : 'Foto de una comida.';
+/** Llama a Claude forzando una herramienta y devuelve lo que puso en ella. */
+async function callClaude(opts: {
+  system: string;
+  tool: { name: string; description: string; input_schema: unknown };
+  content: unknown[];
+  maxTokens: number;
+}): Promise<{ input: Record<string, unknown>; usage: Usage }> {
+  if (!env.ANTHROPIC_API_KEY) throw new AnalysisError(503, 'Esta función todavía no está configurada.');
   let res: Response;
   try {
     res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -124,41 +138,50 @@ export async function analyzePhoto(req: PhotoAnalysisRequest): Promise<AnalysisR
       },
       body: JSON.stringify({
         model: env.AI_MODEL,
-        max_tokens: 1200,
-        system: SYSTEM,
-        tools: [TOOL],
-        tool_choice: { type: 'tool', name: TOOL.name },
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: req.mediaType, data: req.image } },
-              { type: 'text', text: userText },
-            ],
-          },
-        ],
+        max_tokens: opts.maxTokens,
+        system: opts.system,
+        tools: [opts.tool],
+        tool_choice: { type: 'tool', name: opts.tool.name },
+        messages: [{ role: 'user', content: opts.content }],
       }),
       signal: AbortSignal.timeout(45_000),
     });
   } catch (err) {
-    console.error('[analysis] sin respuesta de Anthropic:', (err as Error).message);
-    throw new AnalysisError(502, 'No pudimos analizar la foto ahora. Probá de nuevo o anotala a mano.');
+    console.error('[ia] sin respuesta de Anthropic:', (err as Error).message);
+    throw new AnalysisError(502, 'No pudimos conectarnos ahora. Probá de nuevo en un ratito.');
   }
-
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    console.error(`[analysis] Anthropic ${res.status}: ${body.slice(0, 500)}`);
-    if (res.status === 429 || res.status === 529) throw new AnalysisError(503, 'El análisis está ocupado. Probá de nuevo en un ratito.');
-    throw new AnalysisError(502, 'No pudimos analizar la foto ahora. Probá de nuevo o anotala a mano.');
+    console.error(`[ia] Anthropic ${res.status}: ${body.slice(0, 500)}`);
+    if (res.status === 429 || res.status === 529) throw new AnalysisError(503, 'Está todo un poco ocupado. Probá de nuevo en un ratito.');
+    throw new AnalysisError(502, 'No pudimos resolverlo ahora. Probá de nuevo en un ratito.');
   }
-
   const data = (await res.json()) as {
     content?: { type: string; name?: string; input?: Record<string, unknown> }[];
     usage?: { input_tokens?: number; output_tokens?: number };
   };
   const usage = { inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0 };
-  const call = data.content?.find((c) => c.type === 'tool_use' && c.name === TOOL.name)?.input;
-  if (!call) throw new AnalysisError(502, 'No pudimos leer la foto. Probá con otra o anotala a mano.');
+  const input = data.content?.find((c) => c.type === 'tool_use' && c.name === opts.tool.name)?.input;
+  if (!input) throw new AnalysisError(502, 'No pudimos leer la respuesta. Probá de nuevo.');
+  return { input, usage };
+}
+
+export interface AnalysisResult {
+  analysis: PhotoAnalysis;
+  usage: Usage;
+}
+
+export async function analyzePhoto(req: PhotoAnalysisRequest): Promise<AnalysisResult> {
+  if (!env.ANTHROPIC_API_KEY) throw new AnalysisError(503, 'El análisis con foto todavía no está configurado.');
+  const { input: call, usage } = await callClaude({
+    system: SYSTEM,
+    tool: TOOL,
+    maxTokens: 1200,
+    content: [
+      { type: 'image', source: { type: 'base64', media_type: req.mediaType, data: req.image } },
+      { type: 'text', text: req.slotLabel ? `Foto de: ${req.slotLabel}.` : 'Foto de una comida.' },
+    ],
+  });
 
   const rawItems = Array.isArray(call.ingredientes) ? (call.ingredientes as RawItem[]) : [];
   const items = rawItems.map(toItem).filter((x): x is MealItem => x !== null).slice(0, 10);
@@ -173,6 +196,101 @@ export async function analyzePhoto(req: PhotoAnalysisRequest): Promise<AnalysisR
     throw new AnalysisError(502, 'No pudimos leer la foto. Probá con otra o anotala a mano.');
   }
   return { analysis: parsed.data, usage };
+}
+
+/* ---------------- Inspiración: ideas de comidas ---------------- */
+
+const IDEAS_SYSTEM = `Proponés ideas de comidas para una app de hábitos alimentarios que acompaña sin culpa.
+
+Reglas:
+- Comida casera y simple, con ingredientes que se consiguen en cualquier súper o verdulería de Argentina. Nombres locales.
+- Tres ideas bien distintas entre sí: al menos una rápida (15 minutos o menos).
+- Ajustá las porciones para que cada idea quede dentro del rango orientativo de calorías y cerca de la proteína indicada. Si no hay rango, usá porciones normales para esa comida.
+- Cantidades concretas por ingrediente (g, ml o unidades) y un rango de calorías y proteína por ingrediente.
+- Nada de lenguaje de dieta ni de culpa ("light", "permitido", "pecado", "quemar", "detox"), ni suplementos, ayunos o productos de marca.
+- Descripción en una oración amable, en español rioplatense.
+- Si la comida es una vianda, que viaje bien y se pueda comer fría o recalentada.
+Respondé solo usando la herramienta proponer_ideas.`;
+
+const IDEA_TAGS = ['vianda', 'rápida', 'sin cocción', 'dulce', 'salada', 'económica', 'post-entreno'] as const;
+
+const IDEAS_TOOL = {
+  name: 'proponer_ideas',
+  description: 'Tres ideas de comida para el momento indicado.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      ideas: {
+        type: 'array',
+        minItems: 3,
+        maxItems: 3,
+        items: {
+          type: 'object',
+          properties: {
+            titulo: { type: 'string', description: 'Nombre corto del plato' },
+            descripcion: { type: 'string', description: 'Una oración' },
+            minutos: { type: 'number', description: 'Minutos de preparación' },
+            etiquetas: { type: 'array', items: { type: 'string', enum: IDEA_TAGS }, maxItems: 3 },
+            ingredientes: TOOL.input_schema.properties.ingredientes,
+          },
+          required: ['titulo', 'descripcion', 'ingredientes'],
+        },
+      },
+    },
+    required: ['ideas'],
+  },
+} as const;
+
+export interface IdeasContext {
+  slotLabel: string;
+  time: string;
+  goalLabel: string;
+  target: { kcal: Range; protein: Range } | null;
+  vianda: boolean;
+  trainedToday: boolean;
+  exclude: string[];
+}
+
+export async function generateIdeas(ctx: IdeasContext): Promise<{ ideas: MealIdea[]; usage: Usage }> {
+  const lines = [
+    `Comida: ${ctx.slotLabel} (alrededor de las ${ctx.time}).`,
+    `Objetivo general: ${ctx.goalLabel}.`,
+    ctx.target
+      ? `Rango orientativo para esta comida: ${ctx.target.kcal.min}–${ctx.target.kcal.max} kcal, con ${ctx.target.protein.min}–${ctx.target.protein.max} g de proteína.`
+      : 'Sin rango de calorías: porciones normales.',
+    ctx.vianda ? 'Es una vianda para llevar al trabajo.' : '',
+    ctx.trainedToday ? 'Hoy entrenó: que tenga una buena fuente de proteína.' : '',
+    ctx.exclude.length ? `No repitas estas ideas: ${ctx.exclude.join(', ')}.` : '',
+  ].filter(Boolean);
+
+  const { input, usage } = await callClaude({
+    system: IDEAS_SYSTEM,
+    tool: IDEAS_TOOL,
+    maxTokens: 2000,
+    content: [{ type: 'text', text: lines.join('\n') }],
+  });
+
+  const raw = Array.isArray(input.ideas) ? (input.ideas as Record<string, unknown>[]) : [];
+  const ideas: MealIdea[] = [];
+  for (const r of raw.slice(0, 3)) {
+    const items = (Array.isArray(r.ingredientes) ? (r.ingredientes as RawItem[]) : [])
+      .map(toItem)
+      .filter((x): x is MealItem => x !== null)
+      .slice(0, 12);
+    const parsed = mealIdeaSchema.safeParse({
+      title: typeof r.titulo === 'string' ? r.titulo.trim().slice(0, 80) : '',
+      description: typeof r.descripcion === 'string' ? r.descripcion.trim().slice(0, 200) : '',
+      items,
+      // Los totales se calculan acá sumando ingredientes; no se confía en un total suelto.
+      kcal: sumRanges(items.map((i) => i.kcal)),
+      protein: sumRanges(items.map((i) => i.protein)),
+      prepMinutes: num(r.minutos) !== undefined ? Math.min(240, Math.round(num(r.minutos)!)) : undefined,
+      tags: Array.isArray(r.etiquetas) ? (r.etiquetas as unknown[]).filter((t): t is string => IDEA_TAGS.includes(t as (typeof IDEA_TAGS)[number])).slice(0, 3) : [],
+    });
+    if (parsed.success && parsed.data.title && parsed.data.items.length) ideas.push(parsed.data);
+  }
+  if (!ideas.length) throw new AnalysisError(502, 'No pudimos armar ideas ahora. Probá de nuevo.');
+  return { ideas, usage };
 }
 
 /** Fecha de hoy en Argentina, para contar el tope diario. */

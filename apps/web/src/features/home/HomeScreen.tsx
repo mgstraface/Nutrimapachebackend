@@ -6,6 +6,7 @@ import { errorText } from '../../lib/api';
 import { localDate, useStore } from '../../lib/store';
 import { useOpenMealSheet } from '../meals/registerContext';
 import { DaySheet } from '../day/DaySheet';
+import { InspirationSheet } from '../inspiration/InspirationSheet';
 
 const EVENT_TTL = 6000;
 
@@ -18,6 +19,8 @@ export function HomeScreen() {
   const openSheet = useOpenMealSheet();
   const [now, setNow] = useState(() => new Date());
   const [dayOpen, setDayOpen] = useState(false);
+  const [ideasFor, setIdeasFor] = useState<string | null>(null);
+  const aiEnabled = useStore((s) => !!s.ai?.enabled);
   const [dayError, setDayError] = useState<string | null>(null);
 
   // Re-evaluar el ánimo de Cachete cuando vence un evento.
@@ -152,9 +155,16 @@ export function HomeScreen() {
                   {list.length ? (
                     list.map((m) => <MealLine key={m.id} meal={m} onOpen={() => openSheet({ mode: 'edit', mealId: m.id })} />)
                   ) : (
-                    <button type="button" className="path-empty" onClick={() => openSheet({ mode: 'new', slotKey: slot.key })}>
-                      Anotar cuando quieras
-                    </button>
+                    <div className="path-actions">
+                      <button type="button" className="path-empty" onClick={() => openSheet({ mode: 'new', slotKey: slot.key })}>
+                        Anotar cuando quieras
+                      </button>
+                      {aiEnabled && (
+                        <button type="button" className="ideas-btn" onClick={() => setIdeasFor(slot.key)}>
+                          <span aria-hidden="true">✨</span> Ideas
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </li>
@@ -199,6 +209,7 @@ export function HomeScreen() {
       </section>
 
       <DaySheet open={dayOpen} date={today} planned={planned} onClose={() => setDayOpen(false)} />
+      <InspirationSheet slotKey={ideasFor} onClose={() => setIdeasFor(null)} />
     </div>
   );
 }

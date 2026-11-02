@@ -74,6 +74,8 @@ const aiUsageSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, required: true },
     date: { type: String, required: true },
+    /** foto | ideas */
+    kind: { type: String, default: 'foto' },
     model: String,
     inputTokens: { type: Number, default: 0 },
     outputTokens: { type: Number, default: 0 },

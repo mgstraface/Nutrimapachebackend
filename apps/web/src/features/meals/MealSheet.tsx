@@ -5,7 +5,9 @@ import { api, errorText } from '../../lib/api';
 import { preparePhoto } from '../../lib/photo';
 import { localDate, localTime, useStore } from '../../lib/store';
 
-export type MealSheetTarget = { mode: 'new'; slotKey?: string } | { mode: 'edit'; mealId: string };
+export type MealSheetTarget =
+  | { mode: 'new'; slotKey?: string; prefill?: { description: string; items: MealItem[]; note?: string } }
+  | { mode: 'edit'; mealId: string };
 
 interface Props {
   target: MealSheetTarget | null;
@@ -70,8 +72,10 @@ export function MealSheet({ target, onClose }: Props) {
       const t = localTime();
       setSlotKey(target.mode === 'new' && target.slotKey ? target.slotKey : guessSlot(profile.mealSlots, t));
       setTime(t);
-      setDescription('');
-      setItems([]);
+      const prefill = target.mode === 'new' ? target.prefill : undefined;
+      setDescription(prefill?.description ?? '');
+      setItems(prefill ? prefill.items.map(toDraft) : []);
+      if (prefill) setAiNote(prefill.note ?? 'Es una idea: ajustá las cantidades a lo que comiste de verdad.');
       setEnergy(undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -81,7 +85,10 @@ export function MealSheet({ target, onClose }: Props) {
   useEffect(() => {
     if (!target) return;
     api<AnalysisQuota>('/analysis/quota')
-      .then(setQuota)
+      .then((q) => {
+        setQuota(q);
+        useStore.setState({ ai: q });
+      })
       .catch(() => setQuota(null));
   }, [target]);
 

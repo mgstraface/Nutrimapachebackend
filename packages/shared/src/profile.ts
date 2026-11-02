@@ -54,9 +54,16 @@ export const consentsSchema = z.object({
   version: z.string().default('2026-11'),
 });
 
+/** Para la fórmula de gasto energético. "no-decir" usa un promedio. */
+export const bodySexSchema = z.enum(['femenino', 'masculino', 'no-decir']);
+export type BodySex = z.infer<typeof bodySexSchema>;
+
 export const profileSchema = z.object({
   displayName: z.string().min(1).max(40),
   age: z.number().int().min(14).max(110).optional(),
+  heightCm: z.number().min(120).max(230).optional(),
+  weightKg: z.number().min(30).max(300).optional(),
+  sex: bodySexSchema.optional(),
   goal: goalSchema,
   workContext: z.string().max(120).optional(),
   mealSlots: z.array(mealSlotSchema).min(2).max(6),
