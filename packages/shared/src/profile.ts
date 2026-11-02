@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const mealSlotSchema = z.object({
   key: z.string().regex(/^[a-z0-9-]{1,24}$/),
   label: z.string().min(1).max(30),
-  /** Hora aproximada "HH:MM", solo para ordenar y para el saludo del mapache. */
+  /** Hora aproximada "HH:MM", solo para ordenar y para el saludo de la mascota. */
   time: z.string().regex(/^\d{2}:\d{2}$/),
   emoji: z.string().max(4).optional(),
 });
@@ -64,7 +64,7 @@ export const profileSchema = z.object({
   routine: routineSchema,
   view: viewPrefsSchema,
   consents: consentsSchema,
-  mascotName: z.string().min(1).max(20).default('Mapi'),
+  mascotName: z.string().min(1).max(20).default('Cachete'),
 });
 export type Profile = z.infer<typeof profileSchema>;
 

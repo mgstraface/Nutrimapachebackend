@@ -57,14 +57,12 @@
   transform: scale(0.95);
 }
 
-/* ---------- madriguera (home hero) ---------- */
+/* ---------- la noche de Cachete (home hero) ---------- */
 .den {
   position: relative;
-  background:
-    radial-gradient(circle at 78% 18%, rgba(255, 200, 87, 0.35) 0 34px, transparent 90px),
-    linear-gradient(180deg, var(--dusk) 0%, var(--dusk-2) 100%);
+  background: linear-gradient(180deg, var(--dusk) 0%, var(--dusk-2) 100%);
   color: #fff;
-  padding: calc(var(--safe-top) + 18px) 20px 0;
+  padding: calc(var(--safe-top) + 18px) 20px 10px;
   overflow: hidden;
 }
 .den-top {
@@ -96,7 +94,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 14px 0 6px;
+  padding: 14px 0 0;
+  margin-bottom: -6px;
   position: relative;
   z-index: 1;
 }
@@ -124,18 +123,22 @@
   transform: translateX(-50%) rotate(45deg);
   border-radius: 3px;
 }
-.den-hill {
-  display: block;
-  width: 100%;
-  height: 40px;
-  margin: -30px -20px 0;
-  width: calc(100% + 40px);
-  position: relative;
+/* Guarda tejida al pie del panel, como el borde del aguayo: Cachete se para sobre ella */
+.den::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 10px;
+  background:
+    linear-gradient(var(--magenta), var(--magenta)) top / 100% 2px no-repeat,
+    repeating-linear-gradient(120deg, var(--lamp) 0 6px, #f08a3c 6px 12px, var(--magenta) 12px 18px, #2a2233 18px 24px);
 }
 
 /* ---------- el día ---------- */
 .day {
-  padding: 4px 20px 0;
+  padding: 16px 20px 0;
 }
 .day-title {
   font-size: var(--step-2);

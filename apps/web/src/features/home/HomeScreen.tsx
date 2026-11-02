@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { mascotState, weekdayIndex, WEEKDAYS, type Meal } from '@nutrimapache/shared';
-import { Mapache } from '../../mascot/Mapache';
+import { Cachete } from '../../mascot/Cachete';
 import { localDate, useStore } from '../../lib/store';
 import { useOpenMealSheet } from '../meals/registerContext';
 
@@ -15,7 +15,7 @@ export function HomeScreen() {
   const openSheet = useOpenMealSheet();
   const [now, setNow] = useState(() => new Date());
 
-  // Re-evaluar el ánimo del mapache cuando vence un evento.
+  // Re-evaluar el ánimo de Cachete cuando vence un evento.
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 2000);
     return () => clearInterval(t);
@@ -53,7 +53,7 @@ export function HomeScreen() {
 
   return (
     <div className="home">
-      <section className="den" aria-label={`${profile.mascotName}, tu mapache`}>
+      <section className="den" aria-label={`${profile.mascotName}, tu compañera`}>
         <div className="den-top">
           <p className="den-date">
             {WEEKDAYS[dayIdx]} {now.getDate()}
@@ -82,11 +82,8 @@ export function HomeScreen() {
               {mood.phrase}
             </motion.p>
           </AnimatePresence>
-          <Mapache expression={mood.expression} size={190} onPet={() => emit('caricia')} />
+          <Cachete expression={mood.expression} size={176} label={profile.mascotName} onPet={() => emit('caricia')} />
         </div>
-        <svg className="den-hill" viewBox="0 0 390 40" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M0 40 V22 C80 2 150 0 210 10 C280 22 330 10 390 4 V40 Z" fill="var(--mist)" />
-        </svg>
       </section>
 
       <section className="day" aria-labelledby="day-title">

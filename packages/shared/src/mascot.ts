@@ -1,5 +1,5 @@
 /**
- * El mapache reacciona a eventos, hora y día de rutina.
+ * La mascota (Cachete) reacciona a eventos, hora y día de rutina.
  * Regla de diseño: el contenido nutricional de una comida NUNCA entra acá.
  */
 export const EXPRESSIONS = ['alegria', 'curiosidad', 'sorpresa', 'descanso', 'acompañamiento'] as const;
@@ -30,7 +30,7 @@ export interface MascotState {
   phrase: string;
 }
 
-/** Palabras que nunca pueden aparecer en una frase del mapache. */
+/** Palabras que nunca pueden aparecer en una frase de la mascota. */
 export const FORBIDDEN_WORDS = ['mal', 'prohibid', 'compensar', 'culpa', 'te pasaste', 'racha perdida', 'fallaste', 'deberías'];
 
 const pick = <T>(arr: readonly T[], seed: number): T => arr[Math.abs(seed) % arr.length]!;
@@ -40,7 +40,7 @@ export function mascotState(ctx: MascotContext, seed = Date.now()): MascotState 
   const night = ctx.hour >= 21 || ctx.hour < 6;
   switch (ctx.event) {
     case 'comida-registrada':
-      return { expression: 'alegria', phrase: pick(['¡Anotado! Gracias por contarme 🦝', '¡Listo! Me encanta saber cómo va tu día.', '¡Guardado! Seguimos juntos.'], seed) };
+      return { expression: 'alegria', phrase: pick(['¡Anotado! Gracias por contarme 💛', '¡Listo! Me encanta saber cómo va tu día.', '¡Guardado! Seguimos juntos.'], seed) };
     case 'foto-tomada':
       return { expression: 'curiosidad', phrase: pick(['Mmm, ¿qué tenemos acá?', 'A ver, a ver… qué rico se ve.'], seed) };
     case 'receta-nueva':

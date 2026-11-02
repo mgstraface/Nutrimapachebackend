@@ -1,19 +1,22 @@
 /*
-  Dirección visual: "la madriguera al anochecer".
-  El mapache vive en un panel azul-ciruela de atardecer, iluminado por una lámpara amarilla.
-  El resto de la app es claro, tranquilo y legible. Sin rojos ni verdes de juicio.
+  Dirección visual: "el tejido de Cachete".
+  La paleta sale del aguayo de la muñeca: azul noche (Cachete acompaña a dormir), violeta,
+  turquesa y el amarillo de la trenza como acento. El resto de la app es claro y tranquilo.
+  Sin rojos ni verdes de juicio: el magenta del tejido solo aparece en la guarda decorativa.
 */
 :root {
-  --dusk: #2b2648;        /* cielo de la madriguera */
-  --dusk-2: #3d3666;      /* colina */
-  --lamp: #ffc857;        /* acento: lámpara, registros, botón principal */
-  --lamp-soft: #fff1cc;
-  --mist: #f4f2fa;        /* fondo general */
+  --dusk: #232a7a;        /* azul noche del tejido */
+  --dusk-2: #5a3a9a;      /* violeta del tejido */
+  --lamp: #f6c445;        /* acento: amarillo de la trenza */
+  --lamp-soft: #fdf0c8;
+  --turq: #3fb6d0;
+  --magenta: #d93a5e;
+  --mist: #f6f3fb;        /* fondo general */
   --paper: #ffffff;
   --ink: #1f1b35;
   --ink-2: #5b5577;       /* texto secundario */
   --line: #e2def0;
-  --fur: #8f8aa3;         /* gris mapache */
+  --fur: #8f8aa3;         /* gris suave para bordes */
   --fur-light: #cdc9da;
   --mask: #2c283d;
 

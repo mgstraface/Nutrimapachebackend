@@ -7,7 +7,7 @@ import {
   type MealSlot,
   type ProfileTemplate,
 } from '@nutrimapache/shared';
-import { Mapache } from '../../mascot/Mapache';
+import { Cachete } from '../../mascot/Cachete';
 import { useStore } from '../../lib/store';
 
 type Step = 'nombre' | 'plantilla' | 'comidas';
@@ -16,7 +16,7 @@ export function OnboardingScreen() {
   const setProfile = useStore((s) => s.setProfile);
   const [step, setStep] = useState<Step>('nombre');
   const [name, setName] = useState('');
-  const [mascotName, setMascotName] = useState('Mapi');
+  const [mascotName, setMascotName] = useState('Cachete');
   const [template, setTemplate] = useState<ProfileTemplate>(PROFILE_TEMPLATES[0]!);
   const [goal, setGoal] = useState<Goal>(PROFILE_TEMPLATES[0]!.profile.goal);
   const [slots, setSlots] = useState<MealSlot[]>(PROFILE_TEMPLATES[0]!.profile.mealSlots);
@@ -31,7 +31,7 @@ export function OnboardingScreen() {
     setProfile({
       ...template.profile,
       displayName: name.trim(),
-      mascotName: mascotName.trim() || 'Mapi',
+      mascotName: mascotName.trim() || 'Cachete',
       goal,
       mealSlots: slots.filter((s) => s.label.trim()),
       consents: { photoStorage: false, aiAnalysis: false, acceptedAt: null, version: '2026-11' },
@@ -41,7 +41,7 @@ export function OnboardingScreen() {
   return (
     <div className="onb">
       <div className="onb-den">
-        <Mapache expression={step === 'nombre' ? 'alegria' : step === 'plantilla' ? 'curiosidad' : 'sorpresa'} size={150} />
+        <Cachete expression={step === 'nombre' ? 'alegria' : step === 'plantilla' ? 'curiosidad' : 'sorpresa'} size={136} />
       </div>
 
       {step === 'nombre' && (
@@ -52,7 +52,7 @@ export function OnboardingScreen() {
             if (name.trim()) setStep('plantilla');
           }}
         >
-          <h1>¡Hola! Soy tu mapache.</h1>
+          <h1>¡Hola! Soy Cachete.</h1>
           <p className="onb-lead">Te acompaño con tus comidas, sin contar nada que no quieras y sin retos.</p>
           <label className="field">
             <span>¿Cómo te llamo?</span>

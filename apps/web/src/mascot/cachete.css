@@ -1,0 +1,114 @@
+.cachete {
+  background: none;
+  border: 0;
+  padding: 0;
+  display: block;
+  -webkit-tap-highlight-color: transparent;
+}
+.cachete:active .cachete-svg {
+  transform: scale(0.95);
+}
+.cachete-svg {
+  overflow: visible;
+  transition: transform 0.15s ease;
+}
+
+/* Todo rota en coordenadas del dibujo, no de la caja de cada pieza */
+.cachete-svg g,
+.cachete-svg text {
+  transform-box: view-box;
+}
+
+/* Respira: un leve estirón cada 3 s (más lento cuando descansa) */
+.cachete-body {
+  transform-origin: 100px 208px;
+  animation: cachete-breathe 3s ease-in-out infinite;
+}
+.is-descanso .cachete-body {
+  animation: cachete-sway 4.5s ease-in-out infinite;
+}
+/* Saltito de alegría y sorpresa al aparecer la expresión */
+.is-alegria .cachete-body,
+.is-sorpresa .cachete-body {
+  animation: cachete-hop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) 1, cachete-breathe 3s ease-in-out 0.5s infinite;
+}
+
+.cachete-head {
+  transform-origin: 100px 98px;
+  transition: transform 0.45s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+/* Los brazos van de una pose a otra con un rebote suave */
+.cachete-arm {
+  transition: transform 0.5s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.cachete-wave {
+  animation: cachete-wave 1.6s ease-in-out infinite;
+}
+
+.cachete-blink {
+  transform-origin: 100px 68px;
+  animation: cachete-blink 4s infinite;
+}
+
+.cachete-pop {
+  transform-origin: 100px 50px;
+  animation: cachete-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.cachete-zz {
+  animation: cachete-zz 3s ease-in-out infinite;
+}
+.cachete-q {
+  transform-origin: 154px 40px;
+  animation: cachete-tilt 2s ease-in-out infinite;
+}
+
+@keyframes cachete-breathe {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.025); }
+}
+@keyframes cachete-sway {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+@keyframes cachete-hop {
+  0% { transform: translateY(-14px); }
+  100% { transform: translateY(0); }
+}
+@keyframes cachete-wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-14deg); }
+  50% { transform: rotate(4deg); }
+  75% { transform: rotate(-14deg); }
+}
+@keyframes cachete-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+@keyframes cachete-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes cachete-zz {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50% { transform: translateY(-6px); opacity: 1; }
+}
+@keyframes cachete-tilt {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(12deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cachete-body,
+  .cachete-wave,
+  .cachete-blink,
+  .cachete-pop,
+  .cachete-zz,
+  .cachete-q {
+    animation: none !important;
+  }
+  .cachete-arm,
+  .cachete-head {
+    transition: none;
+  }
+}

@@ -1,13 +1,13 @@
-# NutriMapache 🦝
+# Cachete Nutri
 
-PWA para iPhone que acompaña hábitos alimentarios sin culpa, con un mapache que celebra y acompaña. Multiusuario: cada persona crea su cuenta y arma su perfil (comidas del día, rutina, objetivo, qué números ver).
+PWA para iPhone que acompaña hábitos alimentarios sin culpa, con Cachete: una muñeca quitapenas envuelta en su tejido norteño que celebra y acompaña. Multiusuario: cada persona crea su cuenta y arma su perfil (comidas del día, rutina, objetivo, qué números ver).
 
 ## Estructura
 
 ```
 apps/web         React + Vite (PWA, mobile-first)
 apps/api         Node + Express + MongoDB
-packages/shared  Esquemas Zod, plantillas de perfil, lógica del mapache
+packages/shared  Esquemas Zod, plantillas de perfil, lógica de la mascota
 docker/          nginx interno del contenedor web (PWA + proxy a la API)
 scripts/         deploy-vps.sh (deploy en el VPS compartido)
 ```
@@ -31,7 +31,7 @@ Corre en el mismo VPS que Casa Roma y el robot. El nginx del VPS es el único qu
 |---|---|---|---|
 | Robot (prod) | `/root/robot` | `127.0.0.1:8090` | `127.0.0.1:27020` |
 | Robot (pruebas) | `/root/robot-dev` | `127.0.0.1:8091` | `127.0.0.1:27021` |
-| NutriMapache | `/root/nutrimapache/app` | `127.0.0.1:8092` | `127.0.0.1:27022` |
+| Cachete Nutri | `/root/nutrimapache/app` | `127.0.0.1:8092` | `127.0.0.1:27022` |
 | Casa Roma | `/root/casa_roma` | — | — |
 
 Primera vez, en el VPS:
@@ -55,7 +55,7 @@ En el iPhone: Safari → Compartir → **Agregar a inicio**.
 
 ## Estado
 
-- **Fase 1 (esta):** interfaz, mapache con 5 expresiones, onboarding con plantillas, registro manual de comidas guardado en el teléfono, historial, exportar y borrar.
+- **Fase 1 (esta):** interfaz, Cachete con 5 expresiones animadas, onboarding con plantillas, registro manual de comidas guardado en el teléfono, historial, exportar y borrar.
 - **Fase 2:** cuentas en la API, comidas en Mongo, catálogo de alimentos con rangos, fotos sin análisis, admin de usuarios.
 - **Fase 3:** menú semanal, recetas, entrenamiento.
 - **Fase 4:** análisis de fotos con IA, solo con consentimiento.
@@ -64,3 +64,5 @@ En el iPhone: Safari → Compartir → **Agregar a inicio**.
 ## Principios
 
 Ninguna comida es buena o mala. Sin puntos, rachas ni sanciones. Toda estimación es un rango con su confianza. Fotos y datos no salen del servidor sin consentimiento. Las claves de API viven solo en el backend.
+
+> El repo, la carpeta del VPS y los contenedores siguen usando el nombre interno `nutrimapache`; lo que ve la usuaria dice Cachete Nutri.

@@ -44,7 +44,7 @@ export const PROFILE_TEMPLATES: ProfileTemplate[] = [
         { trainingKey: null, moment: null },
       ],
       view: DEFAULT_VIEW,
-      mascotName: 'Mapi',
+      mascotName: 'Cachete',
     },
   },
   {
@@ -57,7 +57,7 @@ export const PROFILE_TEMPLATES: ProfileTemplate[] = [
       trainingTypes: [],
       routine: Array.from({ length: 7 }, () => ({ trainingKey: null, moment: null })),
       view: DEFAULT_VIEW,
-      mascotName: 'Mapi',
+      mascotName: 'Cachete',
     },
   },
 ];

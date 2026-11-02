@@ -11,7 +11,7 @@ export function SettingsScreen() {
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), profile, meals }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `nutrimapache-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `cachete-nutri-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
