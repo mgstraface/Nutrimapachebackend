@@ -116,7 +116,7 @@ export function SettingsScreen() {
         <h2>Cuenta</h2>
         {user.role === 'admin' && (
           <Link to="/admin" className="btn-quiet btn-link">
-            Administrar usuarios
+            Panel de admin: usuarios y alimentos
           </Link>
         )}
         <button type="button" className="btn-quiet" onClick={() => void logout()}>

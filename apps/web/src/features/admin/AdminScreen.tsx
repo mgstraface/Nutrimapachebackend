@@ -45,7 +45,7 @@ export function AdminScreen() {
       <Link to={hasProfile ? '/yo' : '/'} className="back-link">
         Volver
       </Link>
-      <h1 className="page-title">Usuarios</h1>
+      <h1 className="page-title">Panel de admin</h1>
       <p className="muted">Las cuentas se crean solo desde acá. Pasale a cada persona su usuario y contraseña.</p>
 
       {notice && (
