@@ -202,11 +202,9 @@ function UserRow({
           <button type="button" className="btn-quiet" onClick={() => setEditing(true)}>
             Cambiar contraseña
           </button>
-          {!isMe && (
-            <button type="button" className="btn-quiet" aria-expanded={showExtras} onClick={() => setShowExtras(!showExtras)}>
-              💌 Notitas y fechas
-            </button>
-          )}
+          <button type="button" className="btn-quiet" aria-expanded={showExtras} onClick={() => setShowExtras(!showExtras)}>
+            💌 Notitas y fechas
+          </button>
           {!isMe && (
             <>
               <button type="button" className="btn-quiet" onClick={onToggle}>
