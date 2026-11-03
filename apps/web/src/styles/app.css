@@ -1177,6 +1177,7 @@ textarea {
 
 /* ---------- carta ---------- */
 .letter {
+  color: var(--ink);
   position: fixed;
   z-index: 40;
   left: 0;
@@ -1209,6 +1210,8 @@ textarea {
 }
 .letter-text {
   margin: 0;
+  color: var(--ink);
+  user-select: text;
   font-family: var(--font-display);
   font-size: var(--step-1);
   line-height: 1.5;
