@@ -15,7 +15,7 @@ export function createApp() {
   // La foto para analizar viaja en el body (ya achicada, ~200-600 KB en base64); el resto, chico.
   const bigJson = express.json({ limit: '5mb' });
   const smallJson = express.json({ limit: '200kb' });
-  app.use((req, res, next) => (req.path === '/api/v1/analysis/photo' ? bigJson(req, res, next) : smallJson(req, res, next)));
+  app.use((req, res, next) => (req.path === '/api/v1/analysis/photo' || req.path === '/api/v1/admin/foods/bulk' ? bigJson(req, res, next) : smallJson(req, res, next)));
   app.use(cookieParser());
   app.use(loadUser);
 

@@ -15,6 +15,8 @@ import {
   recipeSchema,
   photoAnalysisRequestSchema,
   foodInputSchema,
+  foodBulkSchema,
+  fold,
   textAnalysisRequestSchema,
   specialDateInputSchema,
   plannedFor,
@@ -364,6 +366,26 @@ export function apiRouter(): Router {
       }
       const doc = await FoodItem.create(data);
       res.status(201).json(toFood(doc.toObject()));
+    }),
+  );
+
+  /** Carga masiva desde la planilla: actualiza por nombre (sin distinguir mayúsculas ni tildes) o crea. */
+  r.post(
+    '/admin/foods/bulk',
+    requireAdmin,
+    h(async (req, res) => {
+      const { foods } = foodBulkSchema.parse(req.body);
+      const existing = await FoodItem.find({}, { name: 1 }).lean();
+      const byName = new Map(existing.map((d) => [fold(d.name as string), d._id]));
+      const ops = foods.map((f) => {
+        const id = byName.get(fold(f.name));
+        return id
+          ? { updateOne: { filter: { _id: id }, update: { $set: f, ...(f.each ? {} : { $unset: { each: 1 } }) } } }
+          : { insertOne: { document: f } };
+      });
+      await FoodItem.bulkWrite(ops as never, { ordered: false });
+      const updated = ops.filter((o) => 'updateOne' in o).length;
+      res.json({ created: ops.length - updated, updated });
     }),
   );
 

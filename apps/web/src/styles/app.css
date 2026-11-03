@@ -1748,3 +1748,28 @@ textarea {
 .food-form-actions > :first-child:nth-last-child(3) {
   margin-right: auto;
 }
+.foods-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.btn-file {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.food-row small.inline {
+  display: inline;
+}
+.bulk-errors ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: var(--step--1);
+  color: var(--ink-2);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.bulk-errors p {
+  margin: 0;
+}

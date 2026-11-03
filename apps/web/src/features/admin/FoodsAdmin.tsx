@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { fold, setFoods, type Food, type FoodGroup, type FoodInput } from '@nutrimapache/shared';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { fold, foodsToCsv, parseFoodsCsv, setFoods, suggestedKcal, type Food, type FoodCsvResult, type FoodGroup, type FoodInput } from '@nutrimapache/shared';
 import { api, errorText } from '../../lib/api';
 
 const GROUPS: FoodGroup[] = ['proteína', 'verdura', 'fruta', 'cereal', 'lácteo', 'grasa', 'bebida', 'otro'];
@@ -41,12 +41,62 @@ export function FoodsAdmin() {
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  /** Planilla leída, esperando confirmación */
+  const [upload, setUpload] = useState<(FoodCsvResult & { file: string }) | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  const reload = () =>
+    api<Food[]>('/foods')
+      .then(apply)
+      .catch((err) => setError(errorText(err)));
 
   useEffect(() => {
-    api<Food[]>('/foods')
-      .then(setList)
-      .catch((err) => setError(errorText(err)));
+    void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const download = () => {
+    const blob = new Blob([foodsToCsv(foods ?? [])], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `alimentos-cachete-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setNotice(null);
+    setError(null);
+    if (/\.xlsx?$/i.test(file.name)) {
+      setError('Ese es el archivo de Excel. Guardalo como "CSV UTF-8 (delimitado por comas)" y subí ese.');
+      return;
+    }
+    setUpload({ ...parseFoodsCsv(await file.text()), file: file.name });
+  };
+
+  const confirmUpload = async () => {
+    if (!upload?.foods.length) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const r = await api<{ created: number; updated: number }>('/admin/foods/bulk', { method: 'POST', body: { foods: upload.foods } });
+      setNotice(`Listo: ${r.created} nuevos y ${r.updated} actualizados.`);
+      setUpload(null);
+      await reload();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const existingNames = useMemo(() => new Set((foods ?? []).map((f) => fold(f.name))), [foods]);
+  const uploadNew = upload ? upload.foods.filter((f) => !existingNames.has(fold(f.name))).length : 0;
 
   const apply = (list: Food[]) => {
     const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name, 'es'));
@@ -94,6 +144,54 @@ export function FoodsAdmin() {
         </button>
       </div>
 
+      <div className="foods-bulk">
+        <button type="button" className="btn-quiet btn-small" disabled={!foods?.length} onClick={download}>
+          Descargar planilla
+        </button>
+        <label className="btn-quiet btn-small btn-file">
+          <input type="file" accept=".csv,text/csv" hidden onChange={(e) => void onFile(e)} />
+          Subir planilla
+        </label>
+      </div>
+
+      {upload && (
+        <div className="food-form">
+          <strong>{upload.file}</strong>
+          {upload.foods.length > 0 ? (
+            <p>
+              Se van a cargar <strong>{upload.foods.length}</strong> alimentos: {uploadNew} nuevos y {upload.foods.length - uploadNew} que ya existen y se
+              actualizan. Los que no están en la planilla quedan como están.
+            </p>
+          ) : (
+            <p>No encontramos filas para cargar.</p>
+          )}
+          {upload.errors.length > 0 && (
+            <div className="bulk-errors">
+              <p className="form-error">{upload.errors.length === 1 ? 'Una fila tiene un problema y no se va a cargar:' : `${upload.errors.length} filas tienen problemas y no se van a cargar:`}</p>
+              <ul>
+                {upload.errors.slice(0, 30).map((e) => (
+                  <li key={e}>{e}</li>
+                ))}
+                {upload.errors.length > 30 && <li>… y {upload.errors.length - 30} más</li>}
+              </ul>
+            </div>
+          )}
+          <div className="food-form-actions">
+            <button type="button" className="btn-quiet btn-small" disabled={importing} onClick={() => setUpload(null)}>
+              Cancelar
+            </button>
+            <button type="button" className="btn-primary btn-small" disabled={importing || !upload.foods.length} onClick={() => void confirmUpload()}>
+              {importing ? 'Cargando…' : 'Confirmar carga'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {notice && (
+        <p className="form-ok" role="status">
+          {notice}
+        </p>
+      )}
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -119,8 +217,12 @@ export function FoodsAdmin() {
                   {f.aliases && f.aliases.length > 0 && <small>{f.aliases.slice(0, 3).join(', ')}</small>}
                 </span>
                 <span className="food-row-nums">
-                  {f.kcal} kcal · {f.protein} g prot
-                  <small>{f.each ? `1 ${f.unit} ≈ ${f.each} g` : `${f.qty} ${f.unit}`}</small>
+                  {f.kcal} kcal · {f.protein} g prot <small className="inline">c/100 g</small>
+                  <small>
+                    {f.qty} {f.unit}
+                    {f.each ? ` (${Math.round(f.qty * f.each)} g)` : ''}
+                    {suggestedKcal(f) !== null ? ` ≈ ${suggestedKcal(f)} kcal` : ''}
+                  </small>
                 </span>
               </button>
             </li>

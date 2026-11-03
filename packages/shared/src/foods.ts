@@ -205,6 +205,7 @@ export const foodInputSchema = z.object({
   aliases: z.array(z.string().trim().min(1).max(50)).max(15).default([]),
 });
 export type FoodInput = z.infer<typeof foodInputSchema>;
+export const foodBulkSchema = z.object({ foods: z.array(foodInputSchema).min(1).max(2000) });
 
 /** Busca alimentos para el autocompletado: primero los que empiezan igual, después los que contienen. */
 export function searchFoods(query: string, limit = 6): Food[] {
@@ -285,4 +286,164 @@ export function fillFromCatalog(items: MealItem[]): MealItem[] {
     const est = estimateFromFood(food, it.quantity, it.unit);
     return est.kcal ? { ...it, ...est, group: it.group && it.group !== 'otro' ? it.group : est.group, source: 'catálogo' } : it;
   });
+}
+
+/* ---------------- Planilla (CSV) para carga masiva ---------------- */
+
+/** Columnas de la planilla, en orden. */
+export const FOOD_CSV_COLUMNS = [
+  'nombre',
+  'grupo',
+  'kcal_cada_100g',
+  'proteina_cada_100g',
+  'se_anota_en',
+  'cantidad_sugerida',
+  'gramos_por_unidad',
+  'otros_nombres',
+] as const;
+
+const GROUP_VALUES: FoodGroup[] = ['proteína', 'verdura', 'fruta', 'cereal', 'lácteo', 'grasa', 'bebida', 'otro'];
+const UNIT_VALUES = ['g', 'ml', 'unidad', 'porción', 'taza', 'cda'] as const;
+
+const csvCell = (v: string) => (/[;"\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+const decimal = (n: number) => String(n).replace('.', ',');
+
+/** Planilla con ";" y coma decimal (lo que abre bien el Excel en castellano). */
+export function foodsToCsv(list: Food[]): string {
+  const lines = [FOOD_CSV_COLUMNS.join(';')];
+  for (const f of list) {
+    lines.push(
+      [f.name, f.group, decimal(f.kcal), decimal(f.protein), f.unit, decimal(f.qty), f.each ? decimal(f.each) : '', (f.aliases ?? []).join(', ')]
+        .map(csvCell)
+        .join(';'),
+    );
+  }
+  return '﻿' + lines.join('\r\n') + '\r\n';
+}
+
+/** Separa una línea CSV respetando comillas. */
+function splitCsv(text: string, sep: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (c === '"') quoted = false;
+      else cell += c;
+    } else if (c === '"') quoted = true;
+    else if (c === sep) {
+      row.push(cell);
+      cell = '';
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = '';
+    } else cell += c;
+  }
+  if (cell || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((x) => x.trim()));
+}
+
+const sing = (s: string) => fold(s).replace(/(es|s)$/, '');
+const pickGroup = (v: string): FoodGroup | null => GROUP_VALUES.find((g) => sing(g) === sing(v)) ?? null;
+const pickUnit = (v: string) => UNIT_VALUES.find((u) => fold(u) === fold(v) || (fold(v) === 'unidades' && u === 'unidad') || (fold(v) === 'cucharada' && u === 'cda')) ?? null;
+
+export interface FoodCsvResult {
+  foods: FoodInput[];
+  /** "Fila 12: …" */
+  errors: string[];
+}
+
+/** Lee la planilla (con ";" o ","; coma o punto decimal). No toca nada: solo valida. */
+export function parseFoodsCsv(raw: string): FoodCsvResult {
+  const text = raw.replace(/^﻿/, '');
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? '';
+  const sep = (firstLine.match(/;/g)?.length ?? 0) >= (firstLine.match(/,/g)?.length ?? 0) ? ';' : firstLine.includes('\t') ? '\t' : ',';
+  const rows = splitCsv(text, sep);
+  if (!rows.length) return { foods: [], errors: ['La planilla está vacía.'] };
+  const header = rows[0]!.map((h) => fold(h).replace(/\s+/g, '_'));
+  const col = (name: (typeof FOOD_CSV_COLUMNS)[number]) => header.indexOf(name);
+  const missing = FOOD_CSV_COLUMNS.slice(0, 6).filter((c) => col(c) < 0);
+  if (missing.length) return { foods: [], errors: [`Faltan columnas: ${missing.join(', ')}. La primera fila tiene que tener los títulos de la planilla.`] };
+
+  const n = (v: string | undefined) => {
+    const s = (v ?? '').trim().replace(/\s/g, '');
+    if (!s) return NaN;
+    // "1.234,5" o "1234,5" → 1234.5 ; "9.5" → 9.5
+    const norm = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+    return Number(norm);
+  };
+
+  const foods: FoodInput[] = [];
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  rows.slice(1).forEach((r, i) => {
+    const line = i + 2;
+    const get = (c: (typeof FOOD_CSV_COLUMNS)[number]) => (col(c) >= 0 ? (r[col(c)] ?? '').trim() : '');
+    const name = get('nombre');
+    if (!name) return; // fila vacía o sin nombre: se ignora
+    const group = pickGroup(get('grupo'));
+    const unit = pickUnit(get('se_anota_en'));
+    const each = n(get('gramos_por_unidad'));
+    const parsed = foodInputSchema.safeParse({
+      name,
+      group: group ?? get('grupo'),
+      kcal: n(get('kcal_cada_100g')),
+      protein: n(get('proteina_cada_100g')),
+      unit: unit ?? get('se_anota_en'),
+      qty: n(get('cantidad_sugerida')),
+      each: Number.isFinite(each) && each > 0 ? each : undefined,
+      aliases: get('otros_nombres')
+        .split(/[,|]/)
+        .map((a) => a.trim())
+        .filter(Boolean),
+    });
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0]!;
+      const field = String(issue.path[0] ?? '');
+      const why =
+        field === 'group'
+          ? `grupo "${get('grupo')}" no existe (usá: ${GROUP_VALUES.join(', ')})`
+          : field === 'unit'
+            ? `"se_anota_en" tiene que ser: ${UNIT_VALUES.join(', ')}`
+            : field === 'kcal'
+              ? 'kcal_cada_100g tiene que ser un número entre 0 y 950'
+              : field === 'protein'
+                ? 'proteina_cada_100g tiene que ser un número entre 0 y 100'
+                : field === 'qty'
+                  ? 'cantidad_sugerida tiene que ser un número mayor a 0'
+                  : issue.message;
+      errors.push(`Fila ${line} (${name}): ${why}`);
+      return;
+    }
+    const f = parsed.data;
+    if ((f.unit === 'unidad' || f.unit === 'porción') && !f.each) {
+      errors.push(`Fila ${line} (${name}): si se anota en ${f.unit}, completá gramos_por_unidad`);
+      return;
+    }
+    const key = fold(f.name);
+    if (seen.has(key)) {
+      errors.push(`Fila ${line} (${name}): está repetido en la planilla`);
+      return;
+    }
+    seen.add(key);
+    foods.push(f);
+  });
+  return { foods, errors };
+}
+
+/** Kcal aproximadas de la cantidad sugerida (para mostrar en listas). */
+export function suggestedKcal(f: Food): number | null {
+  const g = gramsFor(f, f.qty, f.unit);
+  return g ? Math.round((f.kcal * g) / 100) : null;
 }
