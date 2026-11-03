@@ -47,6 +47,7 @@ export const PROFILE_TEMPLATES: ProfileTemplate[] = [
       view: DEFAULT_VIEW,
       mascotName: 'Cachete',
       look: DEFAULT_LOOK,
+      pantry: [],
     },
   },
   {
@@ -61,6 +62,7 @@ export const PROFILE_TEMPLATES: ProfileTemplate[] = [
       view: DEFAULT_VIEW,
       mascotName: 'Cachete',
       look: DEFAULT_LOOK,
+      pantry: [],
     },
   },
 ];

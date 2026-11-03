@@ -5,7 +5,7 @@ import { RegisterContext } from '../features/meals/registerContext';
 
 const tabs = [
   { to: '/', label: 'Hoy', icon: IconHome, end: true },
-  { to: '/semana', label: 'Semana', icon: IconWeek },
+  { to: '/recetas', label: 'Recetas', icon: IconPot },
   { to: '/historial', label: 'Historial', icon: IconHistory },
   { to: '/yo', label: 'Yo', icon: IconMe },
 ];
@@ -56,11 +56,11 @@ function IconHome() {
     </svg>
   );
 }
-function IconWeek() {
+function IconPot() {
   return (
-    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <rect x="4" y="5.5" width="16" height="14" rx="2.5" />
-      <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" strokeLinecap="round" />
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.5 10.5h15v5.5a4 4 0 0 1-4 4h-7a4 4 0 0 1-4-4z" />
+      <path d="M2.5 10.5h19M9 4.5c0 1.2 1 1.6 1 2.8M13.5 4.5c0 1.2 1 1.6 1 2.8" />
     </svg>
   );
 }

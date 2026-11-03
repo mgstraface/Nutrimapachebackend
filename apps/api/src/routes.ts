@@ -9,7 +9,10 @@ import {
   inspirationRequestSchema,
   loginSchema,
   mealTarget,
+  mealTipsRequestSchema,
   noteInputSchema,
+  pantryRequestSchema,
+  recipeSchema,
   photoAnalysisRequestSchema,
   specialDateInputSchema,
   plannedFor,
@@ -30,10 +33,10 @@ import {
   startSession,
   verifyPassword,
 } from './auth';
-import { AnalysisError, analyzePhoto, generateIdeas, todayAR } from './analysis';
+import { AnalysisError, analyzePhoto, generateIdeas, generateMealTips, generatePantryRecipes, todayAR, type Usage } from './analysis';
 import { dbReady } from './config/db';
 import { env } from './config/env';
-import { AiUsage, Day, Meal, Note, Profile, SpecialDate, User, toDay, toMeal, toNote, toSessionUser, toSpecial } from './models';
+import { AiUsage, Day, Meal, Note, Profile, SavedRecipe, SpecialDate, User, toDay, toMeal, toNote, toRecipe, toSessionUser, toSpecial } from './models';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
@@ -41,6 +44,31 @@ const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => 
 };
 
 const oid = (id: string) => (Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : null);
+
+/**
+ * Corre una consulta a la IA respetando el tope diario y registrando el uso.
+ * Responde el error amable si algo falla; devuelve null en ese caso.
+ */
+async function withAi<T>(req: Request, res: Response, kind: string, fn: () => Promise<{ usage: Usage } & T>): Promise<T | null> {
+  const date = todayAR();
+  const used = await AiUsage.countDocuments({ userId: req.user!.id, date });
+  if (used >= env.AI_DAILY_LIMIT) {
+    res.status(429).json({ error: 'Por hoy ya usamos todas las consultas a la IA. Mañana seguimos.' });
+    return null;
+  }
+  try {
+    const out = await fn();
+    await AiUsage.create({ userId: req.user!.id, date, kind, model: env.AI_MODEL, ...out.usage, ok: true });
+    return out;
+  } catch (err) {
+    if (err instanceof AnalysisError) {
+      if (err.status !== 503 || env.ANTHROPIC_API_KEY) await AiUsage.create({ userId: req.user!.id, date, kind, model: env.AI_MODEL, ok: false });
+      res.status(err.status).json({ error: err.message });
+      return null;
+    }
+    throw err;
+  }
+}
 
 /** Perfiles guardados con versiones viejas: se completan con los valores por defecto nuevos. */
 const normalizeProfile = (data: unknown) => {
@@ -291,6 +319,100 @@ export function apiRouter(): Router {
     }),
   );
 
+  /* ---------------- "¿Cómo la mejoro?" ---------------- */
+
+  r.post(
+    '/meal-tips',
+    requireUser,
+    h(async (req, res) => {
+      const { mealId } = mealTipsRequestSchema.parse(req.body);
+      const id = oid(mealId);
+      const [meal, doc] = await Promise.all([
+        id ? Meal.findOne({ _id: id, userId: req.user!.id }).lean() : null,
+        Profile.findOne({ userId: req.user!.id }).lean(),
+      ]);
+      const profile = doc?.data as ProfileData | undefined;
+      if (!meal || !profile) {
+        res.status(404).json({ error: 'No encontramos esa comida' });
+        return;
+      }
+      const energy = estimateEnergy(profile);
+      const slot = profile.mealSlots.find((s) => s.key === meal.slotKey);
+      const out = await withAi(req, res, 'mejora', () =>
+        generateMealTips({
+          slotLabel: slot?.label ?? 'Comida',
+          goalLabel: GOAL_LABELS[profile.goal],
+          description: (meal.description as string | undefined) ?? '',
+          items: (meal.items ?? []) as never,
+          target: energy && slot ? mealTarget(profile, slot.key, energy) : null,
+        }),
+      );
+      if (out) res.json({ tips: out.tips });
+    }),
+  );
+
+  /* ---------------- recetas con lo que hay en casa ---------------- */
+
+  r.post(
+    '/pantry-recipes',
+    requireUser,
+    h(async (req, res) => {
+      const body = pantryRequestSchema.parse(req.body);
+      const doc = await Profile.findOne({ userId: req.user!.id }).lean();
+      const profile = doc?.data as ProfileData | undefined;
+      if (!profile) {
+        res.status(409).json({ error: 'Primero armá tu perfil.' });
+        return;
+      }
+      const slot = body.slotKey ? profile.mealSlots.find((s) => s.key === body.slotKey) : undefined;
+      const energy = estimateEnergy(profile);
+      const target = energy && slot ? mealTarget(profile, slot.key, energy) : null;
+      const out = await withAi(req, res, 'recetas', () =>
+        generatePantryRecipes({
+          ingredients: body.ingredients,
+          slotLabel: slot?.label ?? null,
+          goalLabel: GOAL_LABELS[profile.goal],
+          target,
+          exclude: body.exclude,
+        }),
+      );
+      if (out) res.json({ target, recipes: out.recipes });
+    }),
+  );
+
+  r.get(
+    '/recipes',
+    requireUser,
+    h(async (req, res) => {
+      const docs = await SavedRecipe.find({ userId: req.user!.id }).sort({ createdAt: -1 }).limit(200).lean();
+      res.json(docs.map(toRecipe));
+    }),
+  );
+
+  r.post(
+    '/recipes',
+    requireUser,
+    h(async (req, res) => {
+      const data = recipeSchema.parse(req.body);
+      if ((await SavedRecipe.countDocuments({ userId: req.user!.id })) >= 200) {
+        res.status(409).json({ error: 'Ya tenés 200 recetas guardadas. Borrá alguna para sumar otra.' });
+        return;
+      }
+      const doc = await SavedRecipe.create({ userId: req.user!.id, data });
+      res.status(201).json(toRecipe(doc.toObject()));
+    }),
+  );
+
+  r.delete(
+    '/recipes/:id',
+    requireUser,
+    h(async (req, res) => {
+      const id = oid(req.params.id!);
+      if (id) await SavedRecipe.deleteOne({ _id: id, userId: req.user!.id });
+      res.status(204).end();
+    }),
+  );
+
   /* ---------------- momentos: notitas y fechas especiales ---------------- */
 
   r.get(
@@ -350,6 +472,7 @@ export function apiRouter(): Router {
         meals: meals.map(toMeal),
         days: days.map(toDay),
         notes: (await Note.find({ userId: req.user!.id, openedAt: { $ne: null } }).lean()).map(toNote),
+        recipes: (await SavedRecipe.find({ userId: req.user!.id }).lean()).map(toRecipe),
       });
     }),
   );
@@ -363,6 +486,7 @@ export function apiRouter(): Router {
         Profile.deleteOne({ userId: req.user!.id }),
         Meal.deleteMany({ userId: req.user!.id }),
         Day.deleteMany({ userId: req.user!.id }),
+        SavedRecipe.deleteMany({ userId: req.user!.id }),
       ]);
       res.status(204).end();
     }),
@@ -465,6 +589,7 @@ export function apiRouter(): Router {
         AiUsage.deleteMany({ userId: id }),
         Note.deleteMany({ userId: id }),
         SpecialDate.deleteMany({ userId: id }),
+        SavedRecipe.deleteMany({ userId: id }),
         Profile.deleteOne({ userId: id }),
         endAllSessions(String(id)),
         User.deleteOne({ _id: id }),

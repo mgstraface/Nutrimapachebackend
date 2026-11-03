@@ -85,6 +85,8 @@ export const profileSchema = z.object({
   consents: consentsSchema,
   mascotName: z.string().min(1).max(20).default('Cachete'),
   look: lookSchema.default({}),
+  /** Lo que hay en casa, para armar recetas */
+  pantry: z.array(z.string().trim().min(1).max(40)).max(40).default([]),
 });
 export type Profile = z.infer<typeof profileSchema>;
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { emptyDay, mascotState, plannedFor, summarizeDay, tipsFor, weekdayIndex, WEEKDAYS, type Meal } from '@nutrimapache/shared';
+import { dayFeedback, emptyDay, formatRange, mascotState, plannedFor, summarizeDay, tipsFor, weekdayIndex, WEEKDAYS, type Meal } from '@nutrimapache/shared';
 import { errorText } from '../../lib/api';
 import { play } from '../../lib/sound';
 import { localDate, useStore } from '../../lib/store';
@@ -169,6 +169,8 @@ export function HomeScreen() {
           </div>
         )}
 
+        {todaysMeals.length > 0 && <DayGlance items={todaysMeals.flatMap((m) => m.items)} hour={now.getHours()} />}
+
         <div className="water" aria-label="Agua de hoy">
           <div>
             <h3>Agua</h3>
@@ -233,5 +235,35 @@ function MealLine({ meal, onOpen }: { meal: Meal; onOpen: () => void }) {
       <span className="meal-line-text">{text}</span>
       {meal.time && <span className="meal-line-time">{meal.time}</span>}
     </button>
+  );
+}
+
+/** Resumen suave del día: una frase y una barrita contra el rango diario (cifras solo si las quiere ver). */
+function DayGlance({ items, hour }: { items: Meal['items']; hour: number }) {
+  const profile = useStore((s) => s.profile)!;
+  const fb = dayFeedback(profile, items, hour);
+  if (!fb) return null;
+  const show = profile.view.showCalories;
+  const pct = Math.min(100, Math.round(fb.progress * 100 * (1 / 1.3)));
+  const bandFrom = (fb.energy.kcal.min / ((fb.energy.kcal.min + fb.energy.kcal.max) / 2)) * (100 / 1.3);
+  const bandTo = (fb.energy.kcal.max / ((fb.energy.kcal.min + fb.energy.kcal.max) / 2)) * (100 / 1.3);
+  return (
+    <aside className="glance" aria-label="Cómo viene el día">
+      <p>{fb.line}</p>
+      {fb.kcal && (
+        <>
+          <div className="meter-track" aria-hidden="true">
+            <span className="meter-band" style={{ left: `${bandFrom}%`, width: `${bandTo - bandFrom}%` }} />
+            <span className="meter-fill" style={{ width: `${pct}%` }} />
+          </div>
+          {show && (
+            <p className="hint">
+              Llevás {formatRange(fb.kcal)} kcal de {formatRange(fb.energy.kcal)} sugeridas
+              {fb.protein ? ` · proteína ${formatRange(fb.protein)} de ${formatRange(fb.energy.protein)} g` : ''}
+            </p>
+          )}
+        </>
+      )}
+    </aside>
   );
 }

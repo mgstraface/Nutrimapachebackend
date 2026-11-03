@@ -58,3 +58,41 @@ export interface InspirationResponse {
   target: { kcal: Range; protein: Range } | null;
   ideas: MealIdea[];
 }
+
+/* ---------------- "¿Cómo la mejoro?" ---------------- */
+
+export const mealTipsRequestSchema = z.object({ mealId: z.string().min(1).max(40) });
+export interface MealTipsResponse {
+  tips: string[];
+}
+
+/* ---------------- Recetas con lo que hay en casa ---------------- */
+
+export const pantryRequestSchema = z.object({
+  ingredients: z.array(z.string().trim().min(1).max(40)).min(1).max(30),
+  /** Para qué comida (opcional) */
+  slotKey: z.string().max(24).nullable().default(null),
+  exclude: z.array(z.string().max(80)).max(12).default([]),
+});
+export type PantryRequest = z.infer<typeof pantryRequestSchema>;
+
+export const recipeSchema = z.object({
+  title: z.string().min(1).max(80),
+  description: z.string().max(200).default(''),
+  items: z.array(mealItemSchema).max(16),
+  steps: z.array(z.string().max(240)).max(12).default([]),
+  /** Ingredientes que no estaban en la lista (fuera de lo básico) */
+  missing: z.array(z.string().max(40)).max(6).default([]),
+  kcal: rangeSchema.optional(),
+  protein: rangeSchema.optional(),
+  prepMinutes: z.number().int().min(0).max(240).optional(),
+  servings: z.number().int().min(1).max(8).default(1),
+  tags: z.array(z.string().max(20)).max(4).default([]),
+});
+export type Recipe = z.infer<typeof recipeSchema>;
+export type SavedRecipe = Recipe & { id: string; createdAt: string };
+
+export interface PantryResponse {
+  target: { kcal: Range; protein: Range } | null;
+  recipes: Recipe[];
+}

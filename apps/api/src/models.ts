@@ -114,6 +114,21 @@ const specialDateSchema = new Schema(
 specialDateSchema.index({ userId: 1, monthDay: 1 });
 export const SpecialDate = mongoose.model('SpecialDate', specialDateSchema);
 
+/* Recetas favoritas (guardadas desde ideas o desde "¿Qué hay en casa?"). */
+const recipeSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, required: true, index: true },
+    data: { type: Schema.Types.Mixed, required: true },
+  },
+  { timestamps: true, minimize: false },
+);
+export const SavedRecipe = mongoose.model('SavedRecipe', recipeSchema);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function toRecipe(doc: any) {
+  return { ...doc.data, id: String(doc._id), createdAt: new Date(doc.createdAt).toISOString() };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function toNote(doc: any) {
   return {

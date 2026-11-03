@@ -2,12 +2,14 @@ import {
   foodGroupSchema,
   mealIdeaSchema,
   photoAnalysisSchema,
+  recipeSchema,
   sumRanges,
   type MealIdea,
   type MealItem,
   type PhotoAnalysis,
   type PhotoAnalysisRequest,
   type Range,
+  type Recipe,
 } from '@nutrimapache/shared';
 import { env } from './config/env';
 
@@ -291,6 +293,142 @@ export async function generateIdeas(ctx: IdeasContext): Promise<{ ideas: MealIde
   }
   if (!ideas.length) throw new AnalysisError(502, 'No pudimos armar ideas ahora. Probá de nuevo.');
   return { ideas, usage };
+}
+
+/* ---------------- "¿Cómo la mejoro?" ---------------- */
+
+const TIPS_SYSTEM = `Sos Cachete, la compañera de una app de hábitos alimentarios que acompaña sin culpa.
+Te pasan una comida que la persona ya comió y tenés que darle 2 ideas concretas para una próxima vez parecida.
+
+Reglas:
+- Las ideas mantienen el plato que le gusta: cambiar la cocción (al horno en vez de frito), ajustar una porción, sumar verdura o proteína, cambiar un acompañamiento.
+- Tono cálido y breve, en español rioplatense, una oración cada idea. Empezá con un verbo ("Probá…", "Sumale…", "La próxima…").
+- Nada de culpa ni de dieta: no uses "mal", "exceso", "te pasaste", "prohibido", "compensar", "light", "quemar". No sugieras saltear comidas ni ayunos.
+- Si la comida ya está equilibrada, una de las ideas puede ser solo para variar o hacerla más rica.
+Respondé solo usando la herramienta dar_ideas.`;
+
+const TIPS_TOOL = {
+  name: 'dar_ideas',
+  description: 'Dos ideas amables para una próxima vez.',
+  input_schema: {
+    type: 'object',
+    properties: { ideas: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 2 } },
+    required: ['ideas'],
+  },
+} as const;
+
+const BAD_WORDS = /\b(mal|malo|exceso|te pasaste|prohibid|compensar|light|quemar|culpa|ayun)/i;
+
+export async function generateMealTips(ctx: {
+  slotLabel: string;
+  goalLabel: string;
+  description: string;
+  items: MealItem[];
+  target: { kcal: Range; protein: Range } | null;
+}): Promise<{ tips: string[]; usage: Usage }> {
+  const total = sumRanges(ctx.items.map((i) => i.kcal));
+  const prot = sumRanges(ctx.items.map((i) => i.protein));
+  const lines = [
+    `Comida: ${ctx.slotLabel}. Objetivo general: ${ctx.goalLabel}.`,
+    ctx.description ? `Descripción: ${ctx.description}.` : '',
+    ctx.items.length
+      ? `Ingredientes: ${ctx.items.map((i) => `${i.name}${i.quantity ? ` (${i.quantity} ${i.unit ?? 'g'})` : ''}`).join(', ')}.`
+      : '',
+    total ? `Estimado: ${total.min}–${total.max} kcal${prot ? `, ${prot.min}–${prot.max} g de proteína` : ''}.` : '',
+    ctx.target ? `Rango orientativo para esta comida: ${ctx.target.kcal.min}–${ctx.target.kcal.max} kcal y ${ctx.target.protein.min}–${ctx.target.protein.max} g de proteína.` : '',
+  ].filter(Boolean);
+  const { input, usage } = await callClaude({ system: TIPS_SYSTEM, tool: TIPS_TOOL, maxTokens: 400, content: [{ type: 'text', text: lines.join('\n') }] });
+  const tips = (Array.isArray(input.ideas) ? input.ideas : [])
+    .filter((t): t is string => typeof t === 'string')
+    .map((t) => t.trim().slice(0, 220))
+    .filter((t) => t && !BAD_WORDS.test(t))
+    .slice(0, 2);
+  if (!tips.length) throw new AnalysisError(502, 'No pudimos armar ideas ahora. Probá de nuevo.');
+  return { tips, usage };
+}
+
+/* ---------------- Recetas con lo que hay en casa ---------------- */
+
+const PANTRY_SYSTEM = `Armás recetas caseras con lo que la persona tiene en su casa, para una app de hábitos alimentarios que acompaña sin culpa.
+
+Reglas:
+- Usá principalmente los ingredientes de la lista. Podés asumir que hay básicos: sal, pimienta, aceite, ajo, cebolla, especias secas, agua. Si una receta necesita algo más, ponelo en "faltan" (como mucho 2 cosas) y preferí recetas que no necesiten nada extra.
+- Dos o tres recetas bien distintas entre sí, simples, con pasos cortos y concretos (máximo 6 pasos).
+- Todo para UNA porción: cantidad de cada ingrediente y su rango de calorías y proteína para esa porción. Si hay un rango orientativo para la comida, ajustá las cantidades a ese rango.
+- Nombres y expresiones de Argentina. Nada de lenguaje de dieta ni de culpa ("light", "permitido", "pecado", "quemar", "detox").
+Respondé solo usando la herramienta proponer_recetas.`;
+
+const RECIPE_TAGS = ['rápida', 'al horno', 'una olla', 'vianda', 'sin cocción', 'económica', 'dulce', 'salada'] as const;
+
+const PANTRY_TOOL = {
+  name: 'proponer_recetas',
+  description: 'Recetas con lo que hay en casa.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      recetas: {
+        type: 'array',
+        minItems: 2,
+        maxItems: 3,
+        items: {
+          type: 'object',
+          properties: {
+            titulo: { type: 'string' },
+            descripcion: { type: 'string', description: 'Una oración' },
+            minutos: { type: 'number' },
+            etiquetas: { type: 'array', items: { type: 'string', enum: RECIPE_TAGS }, maxItems: 3 },
+            faltan: { type: 'array', items: { type: 'string' }, maxItems: 2 },
+            pasos: { type: 'array', items: { type: 'string' }, maxItems: 6 },
+            ingredientes: TOOL.input_schema.properties.ingredientes,
+          },
+          required: ['titulo', 'descripcion', 'pasos', 'ingredientes'],
+        },
+      },
+    },
+    required: ['recetas'],
+  },
+} as const;
+
+export async function generatePantryRecipes(ctx: {
+  ingredients: string[];
+  slotLabel: string | null;
+  goalLabel: string;
+  target: { kcal: Range; protein: Range } | null;
+  exclude: string[];
+}): Promise<{ recipes: Recipe[]; usage: Usage }> {
+  const lines = [
+    `Tengo en casa: ${ctx.ingredients.join(', ')}.`,
+    ctx.slotLabel ? `Es para: ${ctx.slotLabel}. Una porción.` : 'Para cualquier momento del día. Una porción.',
+    `Objetivo general: ${ctx.goalLabel}.`,
+    ctx.target ? `Rango orientativo por porción: ${ctx.target.kcal.min}–${ctx.target.kcal.max} kcal y ${ctx.target.protein.min}–${ctx.target.protein.max} g de proteína.` : '',
+    ctx.exclude.length ? `No repitas: ${ctx.exclude.join(', ')}.` : '',
+  ].filter(Boolean);
+  const { input, usage } = await callClaude({ system: PANTRY_SYSTEM, tool: PANTRY_TOOL, maxTokens: 2600, content: [{ type: 'text', text: lines.join('\n') }] });
+  const raw = Array.isArray(input.recetas) ? (input.recetas as Record<string, unknown>[]) : [];
+  const recipes: Recipe[] = [];
+  for (const r of raw.slice(0, 3)) {
+    const items = (Array.isArray(r.ingredientes) ? (r.ingredientes as RawItem[]) : []).map(toItem).filter((x): x is MealItem => x !== null).slice(0, 16);
+    const strs = (v: unknown, max: number, len: number) =>
+      (Array.isArray(v) ? v : [])
+        .filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+        .map((x) => x.trim().slice(0, len))
+        .slice(0, max);
+    const parsed = recipeSchema.safeParse({
+      title: typeof r.titulo === 'string' ? r.titulo.trim().slice(0, 80) : '',
+      description: typeof r.descripcion === 'string' ? r.descripcion.trim().slice(0, 200) : '',
+      items,
+      steps: strs(r.pasos, 6, 240),
+      missing: strs(r.faltan, 2, 40),
+      kcal: sumRanges(items.map((i) => i.kcal)),
+      protein: sumRanges(items.map((i) => i.protein)),
+      prepMinutes: num(r.minutos) !== undefined ? Math.min(240, Math.round(num(r.minutos)!)) : undefined,
+      servings: 1,
+      tags: strs(r.etiquetas, 3, 20).filter((t) => RECIPE_TAGS.includes(t as (typeof RECIPE_TAGS)[number])),
+    });
+    if (parsed.success && parsed.data.items.length && parsed.data.steps.length) recipes.push(parsed.data);
+  }
+  if (!recipes.length) throw new AnalysisError(502, 'No pudimos armar recetas ahora. Probá de nuevo.');
+  return { recipes, usage };
 }
 
 /** Fecha de hoy en Argentina, para contar el tope diario. */

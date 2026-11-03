@@ -8,7 +8,7 @@ import { OnboardingScreen } from '../features/onboarding/OnboardingScreen';
 import { HistoryScreen } from '../features/history/HistoryScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { AdminScreen } from '../features/admin/AdminScreen';
-import { Placeholder } from '../components/Placeholder';
+import { RecipesScreen } from '../features/recipes/RecipesScreen';
 import { Cachete } from '../mascot/Cachete';
 
 export function App() {
@@ -55,7 +55,8 @@ export function App() {
         ) : (
           <Route element={<Layout />}>
             <Route index element={<HomeScreen />} />
-            <Route path="semana" element={<Placeholder title="Tu semana" text="Acá vas a armar el menú semanal y guardar recetas favoritas." />} />
+            <Route path="recetas" element={<RecipesScreen />} />
+            <Route path="semana" element={<Navigate to="/recetas" replace />} />
             <Route path="historial" element={<HistoryScreen />} />
             <Route path="yo" element={<SettingsScreen />} />
             <Route path="*" element={<Navigate to="/" replace />} />

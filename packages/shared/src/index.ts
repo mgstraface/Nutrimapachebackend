@@ -10,3 +10,4 @@ export * from './analysis';
 export * from './energy';
 export * from './look';
 export * from './moments';
+export * from './feedback';

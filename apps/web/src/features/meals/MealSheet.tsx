@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { formatRange, sumRanges, type AnalysisQuota, type MealItem, type PhotoAnalysis, type Range } from '@nutrimapache/shared';
+import { formatRange, mealFeedback, sumRanges, type AnalysisQuota, type Meal, type MealFeedback, type MealItem, type MealTipsResponse, type PhotoAnalysis, type Range } from '@nutrimapache/shared';
+import { Cachete } from '../../mascot/Cachete';
 import { api, errorText } from '../../lib/api';
 import { preparePhoto } from '../../lib/photo';
 import { localDate, localTime, useStore } from '../../lib/store';
@@ -53,6 +54,10 @@ export function MealSheet({ target, onClose }: Props) {
   const [photo, setPhoto] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
+  /** Después de guardar: la "miradita" de Cachete sobre la comida */
+  const [review, setReview] = useState<{ meal: Meal; fb: MealFeedback } | null>(null);
+  const [tips, setTips] = useState<string[] | null>(null);
+  const [tipsBusy, setTipsBusy] = useState(false);
 
   useEffect(() => {
     if (!target || !profile) return;
@@ -62,6 +67,9 @@ export function MealSheet({ target, onClose }: Props) {
     setPhoto(null);
     setAnalyzing(false);
     setAiNote(null);
+    setReview(null);
+    setTips(null);
+    setTipsBusy(false);
     if (editing) {
       setSlotKey(editing.slotKey);
       setTime(editing.time ?? '');
@@ -177,12 +185,36 @@ export function MealSheet({ target, onClose }: Props) {
     setBusy(true);
     setError(null);
     try {
-      if (editing) await updateMeal(editing.id, data);
-      else await addMeal({ ...data, date: localDate(), origin: fromAi ? 'ia' : 'manual' });
-      onClose();
+      if (editing) {
+        await updateMeal(editing.id, data);
+        onClose();
+        return;
+      }
+      const meal = await addMeal({ ...data, date: localDate(), origin: fromAi ? 'ia' : 'manual' });
+      if (cleanItems.length === 0) {
+        onClose();
+        return;
+      }
+      setReview({ meal, fb: mealFeedback(profile, slotKey, cleanItems, profile.view.showCalories) });
+      setBusy(false);
     } catch (err) {
       setError(errorText(err));
       setBusy(false);
+    }
+  };
+
+  const askTips = async () => {
+    if (!review) return;
+    setTipsBusy(true);
+    setError(null);
+    try {
+      const r = await api<MealTipsResponse>('/meal-tips', { method: 'POST', body: { mealId: review.meal.id } });
+      setTips(r.tips.length ? r.tips : ['Así como está, viene muy bien. ¡A disfrutarla!']);
+      void useStore.getState().refreshAi();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setTipsBusy(false);
     }
   };
 
@@ -221,12 +253,15 @@ export function MealSheet({ target, onClose }: Props) {
           >
             <div className="sheet-grip" aria-hidden="true" />
             <header className="sheet-head">
-              <h2 id="sheet-title">{editing ? 'Tu comida' : '¿Qué comiste?'}</h2>
+              <h2 id="sheet-title">{review ? '¡Anotada!' : editing ? 'Tu comida' : '¿Qué comiste?'}</h2>
               <button type="button" className="link" onClick={onClose}>
                 Cerrar
               </button>
             </header>
 
+            {review ? (
+              <MealReview review={review} showNumbers={showCalories} tips={tips} tipsBusy={tipsBusy} canAsk={!!quota?.enabled} onAsk={() => void askTips()} />
+            ) : (
             <div className="sheet-body">
               {photoAvailable && (
                 <div className="photo-box">
@@ -375,12 +410,20 @@ export function MealSheet({ target, onClose }: Props) {
                 <p className="hint">1 = con poca energía · 5 = a pleno</p>
               </fieldset>
             </div>
+            )}
 
             {error && (
               <p className="form-error sheet-error" role="alert">
                 {error}
               </p>
             )}
+            {review ? (
+              <footer className="sheet-foot">
+                <button type="button" className="btn-primary" onClick={onClose}>
+                  Listo
+                </button>
+              </footer>
+            ) : (
             <footer className="sheet-foot">
               {editing && (
                 <button type="button" className="btn-quiet" disabled={busy} onClick={() => void remove()}>
@@ -391,9 +434,80 @@ export function MealSheet({ target, onClose }: Props) {
                 {busy ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar comida'}
               </button>
             </footer>
+            )}
           </motion.div>
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+const REVIEW_FACE = { dentro: 'alegria', generosa: 'acompañamiento', liviana: 'curiosidad', 'sin-datos': 'alegria' } as const;
+
+/** La miradita: frase suave, barrita del rango sugerido y, si quiere, ideas para mejorarla. */
+export function MealReview(props: {
+  review: { meal: Meal; fb: MealFeedback };
+  showNumbers: boolean;
+  tips: string[] | null;
+  tipsBusy: boolean;
+  canAsk: boolean;
+  onAsk: () => void;
+}) {
+  const { fb } = props.review;
+  const { kcal, target } = fb;
+  // Escala de la barrita: hasta 1,6 veces el máximo sugerido para que lo "generoso" se vea sin dramatismo.
+  const scaleMax = target ? target.kcal.max * 1.6 : 1;
+  const pct = (n: number) => `${Math.min(100, Math.max(0, (n / scaleMax) * 100))}%`;
+  const mid = kcal ? (kcal.min + kcal.max) / 2 : 0;
+  return (
+    <div className="sheet-body review">
+      <div className={`review-hero is-${fb.level}`}>
+        <Cachete expression={REVIEW_FACE[fb.level]} size={88} />
+        <p className="review-headline">{fb.headline}</p>
+      </div>
+
+      {kcal && target && (
+        <div className="review-meter" aria-hidden={!props.showNumbers}>
+          <div className="meter-track">
+            <span className="meter-band" style={{ left: pct(target.kcal.min), width: `calc(${pct(target.kcal.max)} - ${pct(target.kcal.min)})` }} />
+            <span className={`meter-dot is-${fb.level}`} style={{ left: pct(mid) }} />
+          </div>
+          {props.showNumbers ? (
+            <p className="hint">
+              Esta comida: {formatRange(kcal)} kcal · sugerido: {formatRange(target.kcal)} kcal
+              {fb.protein ? ` · proteína ${formatRange(fb.protein)} g (sugerido ${formatRange(target.protein)} g)` : ''}
+            </p>
+          ) : (
+            <p className="hint">La franja es lo que te sugiero para esta comida; el puntito, cómo vino.</p>
+          )}
+        </div>
+      )}
+
+      {fb.suggestions.length > 0 && (
+        <ul className="review-tips">
+          {fb.suggestions.map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ul>
+      )}
+
+      {props.tips ? (
+        <div className="review-ai">
+          <p className="review-ai-title">Ideas de Cachete</p>
+          <ul className="review-tips">
+            {props.tips.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        props.canAsk && (
+          <button type="button" className="btn-soft" disabled={props.tipsBusy} onClick={props.onAsk}>
+            {props.tipsBusy ? 'Pensando…' : '✨ ¿Cómo la mejoro?'}
+          </button>
+        )
+      )}
+      <p className="hint review-foot">Son estimaciones aproximadas. Un plato no define nada: lo que cuenta es el conjunto.</p>
+    </div>
   );
 }
