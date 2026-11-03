@@ -27,7 +27,8 @@ function guessSlot(slots: { key: string; time: string }[], time: string): string
 }
 
 const toDraft = (i: MealItem): ItemDraft =>
-  i.kcal ? { ...i, baseQty: i.quantity, baseKcal: i.kcal, baseProtein: i.protein } : reestimate({ ...i });
+  // Lo estimado con el catálogo se recalcula siempre (si el catálogo se corrige, se actualiza solo).
+  i.kcal && i.source !== 'catálogo' ? { ...i, baseQty: i.quantity, baseKcal: i.kcal, baseProtein: i.protein } : reestimate({ ...i });
 
 /**
  * Recalcula la estimación de un ingrediente:
@@ -445,6 +446,7 @@ export function MealSheet({ target, onClose }: Props) {
                         {showCalories && it.kcal ? `aprox. ${formatRange(it.kcal, 'kcal')}` : ''}
                         {showCalories && it.kcal && showMacros && it.protein ? ' · ' : ''}
                         {showMacros && it.protein ? `proteína ${formatRange(it.protein, 'g')}` : ''}
+                        {unitHint(it)}
                       </p>
                     ) : it.name.trim().length > 1 && !it.kcal ? (
                       <p className="item-est is-missing">{it.quantity ? 'No lo tengo en mi lista' : 'Poné la cantidad y te digo cuánto es'}</p>
@@ -590,6 +592,13 @@ export function MealReview(props: {
   );
 }
 
+/** "· 2 × ~30 g": cuánto pesa la unidad o porción que se usó para estimar (para poder corregir). */
+function unitHint(it: ItemDraft): string {
+  if (it.source !== 'catálogo' || !it.quantity || (it.unit !== 'unidad' && it.unit !== 'porción')) return '';
+  const food = it.food ?? matchFood(it.name);
+  return food?.each ? ` · ${it.quantity} × ~${food.each} g (si sabés los gramos, ponelos en g)` : '';
+}
+
 /** Lista desplegable del buscador de alimentos (catálogo local, sin IA). */
 function FoodSuggestions({ query, current, onPick }: { query: string; current: Food | null; onPick: (f: Food) => void }) {
   const list = searchFoods(query).filter((f) => f !== current);
@@ -610,7 +619,7 @@ function FoodSuggestions({ query, current, onPick }: { query: string; current: F
           >
             <span>{f.name}</span>
             <span className="food-suggest-hint">
-              {f.qty} {f.unit}
+              {f.each && (f.unit === 'unidad' || f.unit === 'porción') ? `~${f.each} g c/u` : `${f.qty} ${f.unit}`}
             </span>
           </button>
         </li>
