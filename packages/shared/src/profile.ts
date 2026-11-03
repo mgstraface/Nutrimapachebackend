@@ -16,11 +16,19 @@ export const trainingTypeSchema = z.object({
 });
 export type TrainingType = z.infer<typeof trainingTypeSchema>;
 
-/** Rutina semanal: índice 0 = lunes … 6 = domingo. null = libre. */
+export const momentSchema = z.enum(['mañana', 'mediodía', 'tarde', 'noche']);
+export type Moment = z.infer<typeof momentSchema>;
+
+/**
+ * Rutina semanal: índice 0 = lunes … 6 = domingo. trainingKey null = libre.
+ * La primera actividad va en trainingKey/moment; si ese día hay más (ej. fuerza a la
+ * mañana y bici a la tarde), van en "more".
+ */
 export const routineSchema = z.array(
   z.object({
     trainingKey: z.string().nullable(),
-    moment: z.enum(['mañana', 'mediodía', 'tarde', 'noche']).nullable(),
+    moment: momentSchema.nullable(),
+    more: z.array(z.object({ trainingKey: z.string(), moment: momentSchema })).max(3).default([]),
   }),
 ).length(7);
 export type Routine = z.infer<typeof routineSchema>;

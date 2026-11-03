@@ -48,11 +48,33 @@ export type DayLog = DayLogInput & { date: string; updatedAt?: string };
 
 export const emptyDay = (date: string): DayLog => ({ date, status: null, activities: [], energy: null, water: 0, note: '', mood: null });
 
+export interface PlannedDay {
+  key: string;
+  /** "Fuerza + bici" o, si hay varias, "Fuerza (mañana) + Bici (tarde)" */
+  label: string;
+  /** Momento si hay una sola actividad; null si hay varias (ya está en el label) */
+  moment: string | null;
+  sessions: { key: string; label: string; moment: string | null }[];
+}
+
 /** Lo que tocaba según la rutina para esa fecha (o null si era día libre). */
-export function plannedFor(profile: Profile, date: Date) {
+export function plannedFor(profile: Profile, date: Date): PlannedDay | null {
   const r = profile.routine[weekdayIndex(date)];
-  const t = profile.trainingTypes.find((x) => x.key === r?.trainingKey);
-  return t ? { key: t.key, label: t.label, moment: r?.moment ?? null } : null;
+  if (!r?.trainingKey) return null;
+  const sessions = [{ trainingKey: r.trainingKey, moment: r.moment }, ...(r.more ?? [])]
+    .map((s) => {
+      const t = profile.trainingTypes.find((x) => x.key === s.trainingKey);
+      return t ? { key: t.key, label: t.label, moment: s.moment ?? null } : null;
+    })
+    .filter((s): s is NonNullable<typeof s> => s !== null);
+  if (!sessions.length) return null;
+  if (sessions.length === 1) return { ...sessions[0]!, sessions };
+  return {
+    key: sessions[0]!.key,
+    label: sessions.map((s) => (s.moment ? `${s.label} (${s.moment})` : s.label)).join(' + '),
+    moment: null,
+    sessions,
+  };
 }
 
 /** Texto corto para chips e historial. */

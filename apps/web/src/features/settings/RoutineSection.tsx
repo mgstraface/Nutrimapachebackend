@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { GOAL_LABELS, WEEKDAYS, type Goal, type MealSlot, type Profile, type Routine, type TrainingType } from '@nutrimapache/shared';
+import { GOAL_LABELS, WEEKDAYS, type Goal, type Moment, type MealSlot, type Profile, type Routine, type TrainingType } from '@nutrimapache/shared';
 
 const MOMENTS = ['mañana', 'mediodía', 'tarde', 'noche'] as const;
 
@@ -48,7 +48,15 @@ export function RoutineSection({ profile, onSave }: { profile: Profile; onSave: 
   const removeType = (key: string) => {
     setTypes(types.filter((t) => t.key !== key));
     // Los días que tenían esa actividad pasan a libres
-    setRoutine(routine.map((d) => (d.trainingKey === key ? { trainingKey: null, moment: null } : d)));
+    setRoutine(
+      routine.map((d) => {
+        const more = (d.more ?? []).filter((m) => m.trainingKey !== key);
+        if (d.trainingKey !== key) return { ...d, more };
+        // Si se borra la principal, la primera de las otras pasa a ser la principal
+        const [first, ...rest] = more;
+        return first ? { trainingKey: first.trainingKey, moment: first.moment, more: rest } : { trainingKey: null, moment: null, more: [] };
+      }),
+    );
     touch();
   };
 
@@ -57,10 +65,35 @@ export function RoutineSection({ profile, onSave }: { profile: Profile; onSave: 
       routine.map((d, j) => {
         if (j !== i) return d;
         const next = { ...d, ...patch };
-        if (!next.trainingKey) return { trainingKey: null, moment: null };
-        return { ...next, moment: next.moment ?? 'mañana' };
+        if (!next.trainingKey) return { trainingKey: null, moment: null, more: [] };
+        return { ...next, moment: next.moment ?? 'mañana', more: next.more ?? [] };
       }),
     );
+    touch();
+  };
+
+  const setMore = (i: number, k: number, patch: Partial<Routine[number]['more'][number]>) => {
+    setRoutine(routine.map((d, j) => (j === i ? { ...d, more: (d.more ?? []).map((m, x) => (x === k ? { ...m, ...patch } : m)) } : d)));
+    touch();
+  };
+
+  const addMore = (i: number) => {
+    setRoutine(
+      routine.map((d, j) => {
+        if (j !== i) return d;
+        // Sugiere otra actividad distinta y un momento más tarde que la anterior
+        const used = [d.trainingKey, ...(d.more ?? []).map((m) => m.trainingKey)];
+        const key = types.find((t) => !used.includes(t.key))?.key ?? types[0]!.key;
+        const last = (d.more ?? []).at(-1)?.moment ?? d.moment ?? 'mañana';
+        const moment: Moment = last === 'mañana' || last === 'mediodía' ? 'tarde' : 'noche';
+        return { ...d, more: [...(d.more ?? []), { trainingKey: key, moment }] };
+      }),
+    );
+    touch();
+  };
+
+  const removeMore = (i: number, k: number) => {
+    setRoutine(routine.map((d, j) => (j === i ? { ...d, more: (d.more ?? []).filter((_, x) => x !== k) } : d)));
     touch();
   };
 
@@ -126,29 +159,60 @@ export function RoutineSection({ profile, onSave }: { profile: Profile; onSave: 
         <span>Qué hacés cada día</span>
         <div className="week-rows">
           {routine.map((d, i) => (
-            <div key={i} className={`week-row${d.trainingKey ? ' is-on' : ''}`}>
-              <strong>{WEEKDAYS[i]}</strong>
-              <select aria-label={`Actividad del ${WEEKDAYS[i]}`} value={d.trainingKey ?? ''} onChange={(e) => setDay(i, { trainingKey: e.target.value || null })}>
-                <option value="">Libre</option>
-                {types.map((t) => (
-                  <option key={t.key} value={t.key}>
-                    {t.label}
-                  </option>
+            <div key={i} className={`week-day${d.trainingKey ? ' is-on' : ''}`}>
+              <div className="week-row">
+                <strong>{WEEKDAYS[i]}</strong>
+                <select aria-label={`Actividad del ${WEEKDAYS[i]}`} value={d.trainingKey ?? ''} onChange={(e) => setDay(i, { trainingKey: e.target.value || null })}>
+                  <option value="">Libre</option>
+                  {types.map((t) => (
+                    <option key={t.key} value={t.key}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label={`Momento del ${WEEKDAYS[i]}`}
+                  value={d.moment ?? ''}
+                  disabled={!d.trainingKey}
+                  onChange={(e) => setDay(i, { moment: e.target.value as Moment })}
+                >
+                  {!d.trainingKey && <option value="">—</option>}
+                  {MOMENTS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <span />
+              </div>
+              {d.trainingKey &&
+                (d.more ?? []).map((m, k) => (
+                  <div key={k} className="week-row is-more">
+                    <span aria-hidden="true">y</span>
+                    <select aria-label={`Otra actividad del ${WEEKDAYS[i]}`} value={m.trainingKey} onChange={(e) => setMore(i, k, { trainingKey: e.target.value })}>
+                      {types.map((t) => (
+                        <option key={t.key} value={t.key}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select aria-label={`Momento de la otra actividad del ${WEEKDAYS[i]}`} value={m.moment} onChange={(e) => setMore(i, k, { moment: e.target.value as Moment })}>
+                      {MOMENTS.map((mm) => (
+                        <option key={mm} value={mm}>
+                          {mm}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="icon-btn" aria-label="Quitar esta actividad" onClick={() => removeMore(i, k)}>
+                      ×
+                    </button>
+                  </div>
                 ))}
-              </select>
-              <select
-                aria-label={`Momento del ${WEEKDAYS[i]}`}
-                value={d.moment ?? ''}
-                disabled={!d.trainingKey}
-                onChange={(e) => setDay(i, { moment: e.target.value as Routine[number]['moment'] })}
-              >
-                {!d.trainingKey && <option value="">—</option>}
-                {MOMENTS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+              {d.trainingKey && (d.more ?? []).length < 3 && types.length > 0 && (
+                <button type="button" className="link week-add" onClick={() => addMore(i)}>
+                  + Otra actividad este día
+                </button>
+              )}
             </div>
           ))}
         </div>

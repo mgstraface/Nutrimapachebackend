@@ -60,7 +60,9 @@ export function estimateEnergy(p: Profile): EnergyEstimate | null {
   const sexTerm = p.sex === 'masculino' ? 5 : p.sex === 'femenino' ? -161 : -78;
   const bmr = 10 * p.weightKg + 6.25 * p.heightCm - 5 * p.age + sexTerm;
   const trainingDays = p.routine.filter((d) => d.trainingKey).length;
-  const activityFactor = activityFactorFor(trainingDays);
+  // Una segunda actividad en el mismo día suma, pero como medio día más.
+  const extraSessions = p.routine.reduce((n, d) => n + (d.trainingKey ? (d.more ?? []).length : 0), 0);
+  const activityFactor = activityFactorFor(trainingDays + extraSessions * 0.5);
   const tdee = bmr * activityFactor;
   const [lo, hi] = GOAL_MULTIPLIER[p.goal];
   // Piso: nunca sugerir por debajo del gasto basal.
@@ -75,7 +77,9 @@ export function estimateEnergy(p: Profile): EnergyEstimate | null {
       : p.goal === 'ganar-masa-muscular'
         ? 'Para sumar músculo, el rango queda un poco por encima de lo que gastás.'
         : 'El rango está cerca de lo que gastás en un día típico.';
-  const explanation = `Calculado con tus datos y ${trainingDays === 1 ? '1 día' : `${trainingDays} días`} de entrenamiento por semana. ${goalText}`;
+  const explanation = `Calculado con tus datos y ${trainingDays === 1 ? '1 día' : `${trainingDays} días`} de entrenamiento por semana${
+    extraSessions ? ` (${extraSessions === 1 ? 'uno con doble actividad' : `${extraSessions} con doble actividad`})` : ''
+  }. ${goalText}`;
 
   return { kcal: { min, max }, protein, bmr: Math.round(bmr), tdee: Math.round(tdee), activityFactor, trainingDays, explanation };
 }

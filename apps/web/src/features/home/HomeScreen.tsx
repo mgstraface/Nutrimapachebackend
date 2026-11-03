@@ -44,7 +44,7 @@ export function HomeScreen() {
     today: day,
     loggedSlots: [...new Set(meals.filter((m) => m.date === today).map((m) => m.slotKey))],
     plannedToday: !!planned,
-    trainsTomorrowMorning: tomorrow?.moment === 'mañana',
+    trainsTomorrowMorning: !!tomorrow?.sessions.some((x) => x.moment === 'mañana'),
   }).find((t) => !dismissed.includes(t.id));
 
   const addWater = async (delta: number) => {
