@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ACTIVITY_KINDS, emptyDay, formatMinutes, type Activity, type DayStatus } from '@nutrimapache/shared';
 import { errorText } from '../../lib/api';
+import { Link } from 'react-router-dom';
 import { useStore } from '../../lib/store';
 
 interface Props {
@@ -105,7 +106,10 @@ export function DaySheet({ open, date, planned, onClose }: Props) {
             <div className="sheet-body">
               <p className="hint day-planned">
                 {planned ? `Según tu rutina tocaba ${planned.label}${planned.moment ? ` a la ${planned.moment}` : ''}.` : 'Según tu rutina, hoy era día libre.'} Lo que
-                hagas está bien: acá solo lo anotamos.
+                hagas está bien: acá solo lo anotamos.{' '}
+                <Link to="/yo#semana" className="link" onClick={onClose}>
+                  Cambiar mi rutina habitual
+                </Link>
               </p>
 
               <div className="choices">

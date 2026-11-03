@@ -10,6 +10,7 @@ import {
   type PhotoAnalysisRequest,
   type Range,
   type Recipe,
+  type TextAnalysisRequest,
 } from '@nutrimapache/shared';
 import { env } from './config/env';
 
@@ -197,6 +198,31 @@ export async function analyzePhoto(req: PhotoAnalysisRequest): Promise<AnalysisR
     console.error('[analysis] respuesta fuera de formato', parsed.error.issues.slice(0, 3));
     throw new AnalysisError(502, 'No pudimos leer la foto. Probá con otra o anotala a mano.');
   }
+  return { analysis: parsed.data, usage };
+}
+
+/** Misma herramienta que la foto, pero desde lo que la persona escribió. */
+export async function analyzeText(req: TextAnalysisRequest): Promise<AnalysisResult> {
+  const lines = [
+    req.slotLabel ? `Comida: ${req.slotLabel}.` : '',
+    req.description ? `Lo que contó: ${req.description}` : '',
+    req.items.length
+      ? `Ingredientes que anotó (respetá nombres y cantidades; si falta la cantidad, asumí una porción normal):\n${req.items
+          .map((i) => `- ${i.name}${i.quantity ? `: ${i.quantity} ${i.unit ?? 'g'}` : ''}`)
+          .join('\n')}`
+      : '',
+    'No hay foto: estimá a partir de este texto. es_comida = true salvo que claramente no sea comida.',
+  ].filter(Boolean);
+  const { input: call, usage } = await callClaude({ system: SYSTEM, tool: TOOL, maxTokens: 1200, content: [{ type: 'text', text: lines.join('\n') }] });
+  const rawItems = Array.isArray(call.ingredientes) ? (call.ingredientes as RawItem[]) : [];
+  const items = rawItems.map(toItem).filter((x): x is MealItem => x !== null).slice(0, 20);
+  const parsed = photoAnalysisSchema.safeParse({
+    description: typeof call.descripcion === 'string' ? call.descripcion.trim().slice(0, 280) : req.description,
+    items,
+    notFood: false,
+    uncertaintyNote: typeof call.aviso_incertidumbre === 'string' ? call.aviso_incertidumbre.trim().slice(0, 280) : '',
+  });
+  if (!parsed.success || !items.length) throw new AnalysisError(502, 'No pudimos calcularlo ahora. Probá de nuevo.');
   return { analysis: parsed.data, usage };
 }
 

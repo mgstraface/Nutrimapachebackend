@@ -96,3 +96,14 @@ export interface PantryResponse {
   target: { kcal: Range; protein: Range } | null;
   recipes: Recipe[];
 }
+
+/** Estimar con IA a partir de texto (sin foto), para lo que no está en el catálogo. */
+export const textAnalysisRequestSchema = z.object({
+  description: z.string().max(280).default(''),
+  slotLabel: z.string().max(30).optional(),
+  items: z
+    .array(z.object({ name: z.string().trim().min(1).max(60), quantity: z.number().positive().max(10000).optional(), unit: z.string().max(12).optional() }))
+    .max(20)
+    .default([]),
+});
+export type TextAnalysisRequest = z.infer<typeof textAnalysisRequestSchema>;

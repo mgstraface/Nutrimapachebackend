@@ -14,6 +14,7 @@ import {
   pantryRequestSchema,
   recipeSchema,
   photoAnalysisRequestSchema,
+  textAnalysisRequestSchema,
   specialDateInputSchema,
   plannedFor,
   type Profile as ProfileData,
@@ -33,7 +34,7 @@ import {
   startSession,
   verifyPassword,
 } from './auth';
-import { AnalysisError, analyzePhoto, generateIdeas, generateMealTips, generatePantryRecipes, todayAR, type Usage } from './analysis';
+import { AnalysisError, analyzePhoto, analyzeText, generateIdeas, generateMealTips, generatePantryRecipes, todayAR, type Usage } from './analysis';
 import { dbReady } from './config/db';
 import { env } from './config/env';
 import { AiUsage, Day, Meal, Note, Profile, SavedRecipe, SpecialDate, User, toDay, toMeal, toNote, toRecipe, toSessionUser, toSpecial } from './models';
@@ -267,6 +268,24 @@ export function apiRouter(): Router {
         }
         throw err;
       }
+    }),
+  );
+
+  /** Estimación desde texto, para lo que no está en el catálogo. Sin fotos ni datos personales. */
+  r.post(
+    '/analysis/text',
+    requireUser,
+    h(async (req, res) => {
+      const input = textAnalysisRequestSchema.parse(req.body);
+      if (!input.description.trim() && !input.items.length) {
+        res.status(400).json({ error: 'Contá qué comiste o sumá algún ingrediente.' });
+        return;
+      }
+      const out = await withAi(req, res, 'texto', async () => {
+        const r = await analyzeText(input);
+        return { usage: r.usage, analysis: r.analysis };
+      });
+      if (out) res.json(out.analysis);
     }),
   );
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { GOAL_LABELS, estimateEnergy, formatRange, type BodySex, type Note, type Profile } from '@nutrimapache/shared';
 import { api, errorText } from '../../lib/api';
+import { RoutineSection } from './RoutineSection';
 import { useStore } from '../../lib/store';
 
 export function SettingsScreen() {
@@ -35,6 +36,7 @@ export function SettingsScreen() {
       )}
 
       <BodySection profile={profile} onSave={update} />
+      <RoutineSection profile={profile} onSave={update} />
 
       <section className="group">
         <h2>Qué querés ver</h2>

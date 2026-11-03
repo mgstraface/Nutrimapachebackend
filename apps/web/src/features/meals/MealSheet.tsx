@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { formatRange, mealFeedback, sumRanges, type AnalysisQuota, type Meal, type MealFeedback, type MealItem, type MealTipsResponse, type PhotoAnalysis, type Range } from '@nutrimapache/shared';
+import { estimateFromFood, fillFromCatalog, formatRange, matchFood, mealFeedback, searchFoods, sumRanges, type Food, type AnalysisQuota, type Meal, type MealFeedback, type MealItem, type MealTipsResponse, type PhotoAnalysis, type Range } from '@nutrimapache/shared';
 import { Cachete } from '../../mascot/Cachete';
 import { api, errorText } from '../../lib/api';
 import { preparePhoto } from '../../lib/photo';
@@ -16,7 +16,7 @@ interface Props {
 }
 
 /** Ingrediente en edición. base* guarda la estimación original para reescalar si cambia la cantidad. */
-type ItemDraft = Partial<MealItem> & { name: string; baseQty?: number; baseKcal?: Range; baseProtein?: Range };
+type ItemDraft = Partial<MealItem> & { name: string; baseQty?: number; baseKcal?: Range; baseProtein?: Range; food?: Food | null };
 
 const UNITS = ['g', 'ml', 'porción', 'unidad', 'taza', 'cda'] as const;
 
@@ -26,7 +26,27 @@ function guessSlot(slots: { key: string; time: string }[], time: string): string
   return slots.reduce((best, s) => (Math.abs(toMin(s.time) - now) < Math.abs(toMin(best.time) - now) ? s : best), slots[0]!).key;
 }
 
-const toDraft = (i: MealItem): ItemDraft => ({ ...i, baseQty: i.quantity, baseKcal: i.kcal, baseProtein: i.protein });
+const toDraft = (i: MealItem): ItemDraft =>
+  i.kcal ? { ...i, baseQty: i.quantity, baseKcal: i.kcal, baseProtein: i.protein } : reestimate({ ...i });
+
+/**
+ * Recalcula la estimación de un ingrediente:
+ * - si vino de la IA o de una idea, reescala su estimación original según la cantidad;
+ * - si no, la busca en el catálogo local (sin IA) por el alimento elegido o por el nombre.
+ */
+function reestimate(d: ItemDraft): ItemDraft {
+  if (d.baseKcal && d.baseQty && d.quantity) {
+    const k = d.quantity / d.baseQty;
+    return { ...d, kcal: scale(d.baseKcal, k), protein: scale(d.baseProtein, k) };
+  }
+  if (d.baseKcal && !d.baseQty) return d;
+  const food = d.food ?? matchFood(d.name);
+  if (food && d.quantity) {
+    const est = estimateFromFood(food, d.quantity, d.unit ?? 'g');
+    if (est.kcal) return { ...d, ...est, source: 'catálogo' };
+  }
+  return { ...d, kcal: undefined, protein: undefined, source: d.source === 'catálogo' ? 'usuaria' : d.source };
+}
 
 const scale = (r: Range | undefined, k: number): Range | undefined => (r ? { min: Math.round(r.min * k), max: Math.round(r.max * k) } : undefined);
 
@@ -54,6 +74,9 @@ export function MealSheet({ target, onClose }: Props) {
   const [photo, setPhoto] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
+  /** Ingrediente con el buscador abierto */
+  const [suggestFor, setSuggestFor] = useState<number | null>(null);
+  const [estimating, setEstimating] = useState(false);
   /** Después de guardar: la "miradita" de Cachete sobre la comida */
   const [review, setReview] = useState<{ meal: Meal; fb: MealFeedback } | null>(null);
   const [tips, setTips] = useState<string[] | null>(null);
@@ -107,18 +130,60 @@ export function MealSheet({ target, onClose }: Props) {
   const photoAvailable = !!quota?.enabled && !editing;
   const photoLeft = quota ? Math.max(0, quota.dailyLimit - quota.usedToday) : 0;
 
-  const updateItem = (idx: number, patch: Partial<ItemDraft>) =>
-    setItems(items.map((x, i) => (i === idx ? { ...x, ...patch, editedByUser: true } : x)));
+  /** Cambia algo del ingrediente y recalcula su estimación. */
+  const editItem = (idx: number, patch: Partial<ItemDraft>) =>
+    setItems((list) => list.map((x, i) => (i === idx ? reestimate({ ...x, ...patch, editedByUser: true }) : x)));
 
-  const changeQty = (idx: number, quantity: number | undefined) => {
+  const changeQty = (idx: number, quantity: number | undefined) => editItem(idx, { quantity });
+
+  const changeName = (idx: number, name: string) => {
     const it = items[idx]!;
-    // Si había una estimación para otra cantidad, la reescala proporcionalmente.
-    const k = quantity && it.baseQty ? quantity / it.baseQty : null;
-    updateItem(idx, {
-      quantity,
-      kcal: k ? scale(it.baseKcal, k) : quantity ? it.kcal : undefined,
-      protein: k ? scale(it.baseProtein, k) : quantity ? it.protein : undefined,
+    // Si cambia el nombre, deja de ser el alimento elegido o la estimación de la IA.
+    editItem(idx, { name, food: null, baseKcal: undefined, baseProtein: undefined, baseQty: undefined, source: it.source === 'ia' ? 'usuaria' : it.source });
+    setSuggestFor(idx);
+  };
+
+  const pickFood = (idx: number, food: Food) => {
+    const it = items[idx]!;
+    const keepQty = it.quantity && it.unit && it.unit !== 'g' ? it.unit === food.unit : !!it.quantity;
+    editItem(idx, {
+      name: food.name,
+      food,
+      quantity: keepQty ? it.quantity : food.qty,
+      unit: keepQty ? it.unit : food.unit,
+      group: food.group,
+      baseKcal: undefined,
+      baseProtein: undefined,
+      baseQty: undefined,
     });
+    setSuggestFor(null);
+  };
+
+  /** Para lo que no está en la lista: estimación con IA a partir del texto (sin fotos). */
+  const estimateWithAi = async () => {
+    setEstimating(true);
+    setError(null);
+    try {
+      const slotLabel = profile.mealSlots.find((s) => s.key === slotKey)?.label;
+      const r = await api<PhotoAnalysis>('/analysis/text', {
+        method: 'POST',
+        body: {
+          description: description.trim(),
+          slotLabel,
+          items: items.filter((i) => i.name.trim()).map((i) => ({ name: i.name.trim(), quantity: i.quantity, unit: i.quantity ? i.unit ?? 'g' : undefined })),
+        },
+      });
+      setQuota((q) => (q ? { ...q, usedToday: q.usedToday + 1 } : q));
+      // Lo que ya tenía estimación del catálogo se mantiene; se completa el resto.
+      const known = items.filter((i) => i.name.trim() && i.kcal);
+      const fresh = r.items.filter((n) => !known.some((k) => k.name.trim().toLowerCase() === n.name.toLowerCase())).map(toDraft);
+      setItems([...known, ...fresh]);
+      setAiNote(r.uncertaintyNote || 'Es una estimación aproximada: revisá y corregí lo que haga falta.');
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setEstimating(false);
+    }
   };
 
   const acceptConsent = async () => {
@@ -160,7 +225,7 @@ export function MealSheet({ target, onClose }: Props) {
   };
 
   const save = async () => {
-    const cleanItems: MealItem[] = items
+    const cleanItems: MealItem[] = fillFromCatalog(items
       .filter((i) => i.name.trim())
       .map((i) => ({
         name: i.name.trim(),
@@ -172,7 +237,7 @@ export function MealSheet({ target, onClose }: Props) {
         confidence: i.confidence ?? 'baja',
         source: i.source ?? 'usuaria',
         editedByUser: i.editedByUser ?? true,
-      }));
+      })));
     const fromAi = cleanItems.some((i) => i.source === 'ia');
     const data = {
       slotKey,
@@ -185,12 +250,7 @@ export function MealSheet({ target, onClose }: Props) {
     setBusy(true);
     setError(null);
     try {
-      if (editing) {
-        await updateMeal(editing.id, data);
-        onClose();
-        return;
-      }
-      const meal = await addMeal({ ...data, date: localDate(), origin: fromAi ? 'ia' : 'manual' });
+      const meal = editing ? await updateMeal(editing.id, data) : await addMeal({ ...data, date: localDate(), origin: fromAi ? 'ia' : 'manual' });
       if (cleanItems.length === 0) {
         onClose();
         return;
@@ -348,7 +408,18 @@ export function MealSheet({ target, onClose }: Props) {
                 {items.map((it, idx) => (
                   <div key={idx} className={`item-card${it.source === 'ia' && !it.editedByUser ? ' is-ai' : ''}`}>
                     <div className="item-row">
-                      <input aria-label="Ingrediente" placeholder="Ingrediente" value={it.name} onChange={(e) => updateItem(idx, { name: e.target.value })} />
+                      <div className="item-name">
+                        <input
+                          aria-label="Ingrediente"
+                          placeholder="Buscá: huevo, arroz, tostadas…"
+                          value={it.name}
+                          autoComplete="off"
+                          onChange={(e) => changeName(idx, e.target.value)}
+                          onFocus={() => setSuggestFor(idx)}
+                          onBlur={() => setTimeout(() => setSuggestFor((v) => (v === idx ? null : v)), 150)}
+                        />
+                        {suggestFor === idx && <FoodSuggestions query={it.name} current={it.food ?? null} onPick={(f) => pickFood(idx, f)} />}
+                      </div>
                       <input
                         aria-label="Cantidad"
                         inputMode="decimal"
@@ -360,7 +431,7 @@ export function MealSheet({ target, onClose }: Props) {
                           changeQty(idx, Number.isFinite(v) && v > 0 ? v : undefined);
                         }}
                       />
-                      <select aria-label="Unidad" value={it.unit ?? 'g'} onChange={(e) => updateItem(idx, { unit: e.target.value as MealItem['unit'] })}>
+                      <select aria-label="Unidad" value={it.unit ?? 'g'} onChange={(e) => editItem(idx, { unit: e.target.value as MealItem['unit'] })}>
                         {UNITS.map((u) => (
                           <option key={u}>{u}</option>
                         ))}
@@ -375,10 +446,17 @@ export function MealSheet({ target, onClose }: Props) {
                         {showCalories && it.kcal && showMacros && it.protein ? ' · ' : ''}
                         {showMacros && it.protein ? `proteína ${formatRange(it.protein, 'g')}` : ''}
                       </p>
+                    ) : it.name.trim().length > 1 && !it.kcal ? (
+                      <p className="item-est is-missing">{it.quantity ? 'No lo tengo en mi lista' : 'Poné la cantidad y te digo cuánto es'}</p>
                     ) : null}
                   </div>
                 ))}
-                <button type="button" className="link" onClick={() => setItems([...items, { name: '', unit: 'g' }])}>
+                {quota?.enabled && items.some((i) => i.name.trim().length > 1 && i.quantity && !i.kcal) && (
+                  <button type="button" className="btn-soft" disabled={estimating || photoLeft === 0} onClick={() => void estimateWithAi()}>
+                    {estimating ? 'Calculando…' : '✨ Calcular lo que falta con IA'}
+                  </button>
+                )}
+                <button type="button" className="link" onClick={() => { setItems([...items, { name: '', unit: 'g' }]); setSuggestFor(items.length); }}>
                   Sumar ingrediente
                 </button>
                 {hasEstimates && (showCalories || showMacros) && (
@@ -430,7 +508,7 @@ export function MealSheet({ target, onClose }: Props) {
                   Borrar
                 </button>
               )}
-              <button type="button" className="btn-primary" disabled={!canSave || busy || analyzing} onClick={() => void save()}>
+              <button type="button" className="btn-primary" disabled={!canSave || busy || analyzing || estimating} onClick={() => void save()}>
                 {busy ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar comida'}
               </button>
             </footer>
@@ -509,5 +587,34 @@ export function MealReview(props: {
       )}
       <p className="hint review-foot">Son estimaciones aproximadas. Un plato no define nada: lo que cuenta es el conjunto.</p>
     </div>
+  );
+}
+
+/** Lista desplegable del buscador de alimentos (catálogo local, sin IA). */
+function FoodSuggestions({ query, current, onPick }: { query: string; current: Food | null; onPick: (f: Food) => void }) {
+  const list = searchFoods(query).filter((f) => f !== current);
+  if (!list.length) return null;
+  return (
+    <ul className="food-suggest" role="listbox" aria-label="Alimentos">
+      {list.map((f) => (
+        <li key={f.name}>
+          <button
+            type="button"
+            role="option"
+            aria-selected={false}
+            // onMouseDown para que se elija antes de que el input pierda el foco
+            onMouseDown={(e) => {
+              e.preventDefault();
+              onPick(f);
+            }}
+          >
+            <span>{f.name}</span>
+            <span className="food-suggest-hint">
+              {f.qty} {f.unit}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -36,7 +36,7 @@ interface State {
   logout: () => Promise<void>;
   saveProfile: (p: Profile) => Promise<void>;
   addMeal: (m: MealInput) => Promise<Meal>;
-  updateMeal: (id: string, m: Partial<MealInput>) => Promise<void>;
+  updateMeal: (id: string, m: Partial<MealInput>) => Promise<Meal>;
   deleteMeal: (id: string) => Promise<void>;
   /** Guarda cambios de un día; lo que no se pasa queda como estaba. */
   saveDay: (date: string, patch: Partial<Omit<DayLog, 'date' | 'updatedAt'>>) => Promise<void>;
@@ -150,6 +150,7 @@ export const useStore = create<State>()((set, get) => {
     updateMeal: async (id, patch) => {
       const meal = await api<Meal>(`/meals/${id}`, { method: 'PATCH', body: patch });
       set((s) => ({ meals: sortMeals(s.meals.map((m) => (m.id === id ? meal : m))) }));
+      return meal;
     },
 
     deleteMeal: async (id) => {

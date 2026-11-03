@@ -935,7 +935,7 @@ textarea {
   display: grid;
   gap: 4px;
 }
-.item-card.is-ai input:first-child {
+.item-card.is-ai .item-name input {
   border-color: var(--lamp);
 }
 .item-est {
@@ -1589,4 +1589,78 @@ textarea {
 .recipe-actions .btn-primary,
 .recipe-actions .btn-quiet {
   margin: 0;
+}
+
+/* buscador de alimentos */
+.item-name {
+  position: relative;
+  min-width: 0;
+}
+.item-name input {
+  width: 100%;
+}
+.food-suggest {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  box-shadow: 0 8px 24px rgba(31, 27, 53, 0.14);
+}
+.food-suggest button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+}
+.food-suggest button:active,
+.food-suggest button:hover {
+  background: var(--mist);
+}
+.food-suggest-hint {
+  flex: none;
+  font-size: var(--step--1);
+  color: var(--ink-2);
+}
+.item-est.is-missing {
+  color: var(--fur);
+}
+
+/* Tu semana (Yo) */
+.routine .pantry {
+  margin-bottom: 8px;
+}
+.week-rows {
+  display: grid;
+  gap: 6px;
+}
+.week-row {
+  display: grid;
+  grid-template-columns: 84px 1fr 104px;
+  gap: 6px;
+  align-items: center;
+}
+.week-row strong {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.week-row.is-on strong {
+  color: var(--ink);
+}
+.week-row select:disabled {
+  opacity: 0.45;
 }
