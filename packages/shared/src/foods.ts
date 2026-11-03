@@ -1,4 +1,5 @@
-import type { FoodGroup, MealItem } from './meal';
+import { z } from 'zod';
+import { foodGroupSchema, type FoodGroup, type MealItem } from './meal';
 import type { Range } from './range';
 
 /**
@@ -7,6 +8,8 @@ import type { Range } from './range';
  * nutricionales generales. Siempre se muestran como rango: es una orientación.
  */
 export interface Food {
+  /** id en la base (los del catálogo inicial no tienen) */
+  id?: string;
   name: string;
   group: FoodGroup;
   /** kcal y proteína (g) cada 100 g / 100 ml */
@@ -161,7 +164,8 @@ const ROWS: Row[] = [
   ['Licuado de banana', 'bebida', 85, 3, 'ml', 300, undefined, 'licuado,smoothie'],
 ];
 
-export const FOODS: Food[] = ROWS.map(([name, group, kcal, protein, unit, qty, each, aliases]) => ({
+/** Catálogo inicial: se carga en la base la primera vez; después lo edita el admin. */
+export const DEFAULT_FOODS: Food[] = ROWS.map(([name, group, kcal, protein, unit, qty, each, aliases]) => ({
   name,
   group,
   kcal,
@@ -181,7 +185,26 @@ export const fold = (s: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const INDEX = FOODS.map((f) => ({ food: f, keys: [fold(f.name), ...(f.aliases ?? []).map(fold)] }));
+let INDEX: { food: Food; keys: string[] }[] = [];
+
+/** Reemplaza el catálogo en uso (la app lo baja del servidor al entrar). */
+export function setFoods(list: Food[]): void {
+  INDEX = list.map((f) => ({ food: f, keys: [fold(f.name), ...(f.aliases ?? []).map(fold)].filter(Boolean) }));
+}
+setFoods(DEFAULT_FOODS);
+
+/** Para cargar o editar un alimento desde el panel del admin. */
+export const foodInputSchema = z.object({
+  name: z.string().trim().min(2, 'Poné un nombre').max(50),
+  group: foodGroupSchema,
+  kcal: z.number().min(0).max(950),
+  protein: z.number().min(0).max(100),
+  unit: z.enum(['g', 'ml', 'unidad', 'porción', 'taza', 'cda']),
+  qty: z.number().positive().max(2000),
+  each: z.number().positive().max(2000).optional(),
+  aliases: z.array(z.string().trim().min(1).max(50)).max(15).default([]),
+});
+export type FoodInput = z.infer<typeof foodInputSchema>;
 
 /** Busca alimentos para el autocompletado: primero los que empiezan igual, después los que contienen. */
 export function searchFoods(query: string, limit = 6): Food[] {

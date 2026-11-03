@@ -1664,3 +1664,67 @@ textarea {
 .week-row select:disabled {
   opacity: 0.45;
 }
+
+/* catálogo de alimentos (admin) */
+.foods-admin h2 .muted {
+  font-weight: 400;
+  font-size: var(--step--1);
+}
+.food-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.food-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+}
+.food-row small {
+  display: block;
+  color: var(--ink-2);
+  font-size: 0.75rem;
+}
+.food-row-name {
+  min-width: 0;
+}
+.food-row-nums {
+  flex: none;
+  text-align: right;
+  font-size: var(--step--1);
+}
+.food-form {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  margin: 8px 0;
+  border: 1.5px solid var(--lamp);
+  border-radius: var(--radius-m);
+  background: var(--paper);
+}
+.food-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.food-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.food-form-actions > :first-child:nth-last-child(3) {
+  margin-right: auto;
+}

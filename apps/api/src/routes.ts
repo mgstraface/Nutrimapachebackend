@@ -14,6 +14,7 @@ import {
   pantryRequestSchema,
   recipeSchema,
   photoAnalysisRequestSchema,
+  foodInputSchema,
   textAnalysisRequestSchema,
   specialDateInputSchema,
   plannedFor,
@@ -37,7 +38,7 @@ import {
 import { AnalysisError, analyzePhoto, analyzeText, generateIdeas, generateMealTips, generatePantryRecipes, todayAR, type Usage } from './analysis';
 import { dbReady } from './config/db';
 import { env } from './config/env';
-import { AiUsage, Day, Meal, Note, Profile, SavedRecipe, SpecialDate, User, toDay, toMeal, toNote, toRecipe, toSessionUser, toSpecial } from './models';
+import { AiUsage, Day, FoodItem, Meal, Note, Profile, SavedRecipe, SpecialDate, User, toDay, toFood, toMeal, toNote, toRecipe, toSessionUser, toSpecial } from './models';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
@@ -70,6 +71,8 @@ async function withAi<T>(req: Request, res: Response, kind: string, fn: () => Pr
     throw err;
   }
 }
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Perfiles guardados con versiones viejas: se completan con los valores por defecto nuevos. */
 const normalizeProfile = (data: unknown) => {
@@ -335,6 +338,61 @@ export function apiRouter(): Router {
         }
         throw err;
       }
+    }),
+  );
+
+  /* ---------------- catálogo de alimentos ---------------- */
+
+  r.get(
+    '/foods',
+    requireUser,
+    h(async (_req, res) => {
+      const docs = await FoodItem.find().sort({ name: 1 }).lean();
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      res.json(docs.map(toFood));
+    }),
+  );
+
+  r.post(
+    '/admin/foods',
+    requireAdmin,
+    h(async (req, res) => {
+      const data = foodInputSchema.parse(req.body);
+      if (await FoodItem.exists({ name: new RegExp(`^${escapeRe(data.name)}$`, 'i') })) {
+        res.status(409).json({ error: `Ya hay un alimento llamado "${data.name}".` });
+        return;
+      }
+      const doc = await FoodItem.create(data);
+      res.status(201).json(toFood(doc.toObject()));
+    }),
+  );
+
+  r.put(
+    '/admin/foods/:id',
+    requireAdmin,
+    h(async (req, res) => {
+      const id = oid(req.params.id!);
+      const data = foodInputSchema.parse(req.body);
+      if (id && (await FoodItem.exists({ _id: { $ne: id }, name: new RegExp(`^${escapeRe(data.name)}$`, 'i') }))) {
+        res.status(409).json({ error: `Ya hay otro alimento llamado "${data.name}".` });
+        return;
+      }
+      const doc = id ? await FoodItem.findByIdAndUpdate(id, { $set: data, ...(data.each ? {} : { $unset: { each: 1 } }) }, { new: true }).lean() : null;
+      if (!doc) {
+        res.status(404).json({ error: 'No encontramos ese alimento' });
+        return;
+      }
+      res.json(toFood(doc));
+    }),
+  );
+
+  r.delete(
+    '/admin/foods/:id',
+    requireAdmin,
+    h(async (req, res) => {
+      const id = oid(req.params.id!);
+      if (id) await FoodItem.deleteOne({ _id: id });
+      res.status(204).end();
     }),
   );
 

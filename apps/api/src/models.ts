@@ -114,6 +114,44 @@ const specialDateSchema = new Schema(
 specialDateSchema.index({ userId: 1, monthDay: 1 });
 export const SpecialDate = mongoose.model('SpecialDate', specialDateSchema);
 
+/* Catálogo de alimentos (compartido, lo edita el admin). Valores cada 100 g / 100 ml. */
+const foodSchema = new Schema(
+  {
+    name: { type: String, required: true, unique: true },
+    group: { type: String, required: true },
+    kcal: { type: Number, required: true },
+    protein: { type: Number, required: true },
+    unit: { type: String, required: true },
+    qty: { type: Number, required: true },
+    each: { type: Number },
+    aliases: { type: [String], default: [] },
+  },
+  { timestamps: true },
+);
+export const FoodItem = mongoose.model('FoodItem', foodSchema);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function toFood(d: any) {
+  return {
+    id: String(d._id),
+    name: d.name,
+    group: d.group,
+    kcal: d.kcal,
+    protein: d.protein,
+    unit: d.unit,
+    qty: d.qty,
+    ...(d.each ? { each: d.each } : {}),
+    aliases: d.aliases ?? [],
+  };
+}
+
+/** La primera vez carga el catálogo inicial; después no lo toca (lo maneja el admin). */
+export async function seedFoods(defaults: { name: string }[]): Promise<void> {
+  if ((await FoodItem.estimatedDocumentCount()) > 0) return;
+  await FoodItem.insertMany(defaults, { ordered: false }).catch(() => undefined);
+  console.log(`[foods] catálogo inicial cargado (${defaults.length} alimentos)`);
+}
+
 /* Recetas favoritas (guardadas desde ideas o desde "¿Qué hay en casa?"). */
 const recipeSchema = new Schema(
   {

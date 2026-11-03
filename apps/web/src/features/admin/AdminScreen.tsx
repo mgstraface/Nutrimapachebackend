@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { AdminUserRow, Note, SpecialDate, SpecialKind } from '@nutrimapache/shared';
 import { api, errorText } from '../../lib/api';
 import { useStore } from '../../lib/store';
+import { FoodsAdmin } from './FoodsAdmin';
 
 /** Panel del admin: crear cuentas, cambiar contraseñas, pausar o borrar usuarios. */
 export function AdminScreen() {
@@ -83,6 +84,8 @@ export function AdminScreen() {
           />
         ))}
       </section>
+
+      <FoodsAdmin />
     </div>
   );
 }

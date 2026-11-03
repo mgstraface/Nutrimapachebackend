@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { emptyDay, type AnalysisQuota, type DayLog, type Meal, type MealInput, type MascotEvent, type Moments, type Note, type Profile, type SessionUser } from '@nutrimapache/shared';
+import { emptyDay, setFoods, type Food, type AnalysisQuota, type DayLog, type Meal, type MealInput, type MascotEvent, type Moments, type Note, type Profile, type SessionUser } from '@nutrimapache/shared';
 import { setSoundEnabled } from './sound';
 import { ApiError, api } from './api';
 
@@ -76,6 +76,10 @@ export const useStore = create<State>()((set, get) => {
     setSoundEnabled(me.profile?.view.sound !== false);
     void get().refreshAi();
     void get().loadMoments();
+    // Catálogo de alimentos editable por el admin (si falla, queda el que viene con la app)
+    void api<Food[]>('/foods')
+      .then((list) => list.length && setFoods(list))
+      .catch(() => undefined);
   };
 
   return {
