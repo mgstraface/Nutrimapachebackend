@@ -71,6 +71,64 @@
   align-items: center;
   gap: 12px;
 }
+.den-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.den-arrow {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.den-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.den-arrow:not(:disabled):active {
+  background: rgb(255 255 255 / 0.15);
+}
+.past-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 20px 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-m);
+  background: var(--lamp-soft);
+  color: var(--ink);
+  font-size: var(--step--1);
+}
+.past-banner p {
+  margin: 0;
+}
+.yesterday-link {
+  display: block;
+  margin: 12px auto 0;
+}
+.sheet-when {
+  margin: -4px 0 8px;
+  padding: 0 20px;
+  font-size: var(--step--1);
+  color: var(--ink-2);
+}
+.hist-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.hist-edit {
+  font-size: var(--step--1);
+}
 .den-date {
   margin: 0;
   font-family: var(--font-display);

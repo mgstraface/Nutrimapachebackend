@@ -7,7 +7,13 @@ import { preparePhoto } from '../../lib/photo';
 import { localDate, localTime, useStore } from '../../lib/store';
 
 export type MealSheetTarget =
-  | { mode: 'new'; slotKey?: string; prefill?: { description: string; items: MealItem[]; note?: string } }
+  | {
+      mode: 'new';
+      slotKey?: string;
+      /** Día "YYYY-MM-DD" al que se anota; si no viene, es hoy. */
+      date?: string;
+      prefill?: { description: string; items: MealItem[]; note?: string };
+    }
   | { mode: 'edit'; mealId: string };
 
 interface Props {
@@ -102,8 +108,11 @@ export function MealSheet({ target, onClose }: Props) {
       setEnergy(editing.feeling?.energy);
     } else {
       const t = localTime();
-      setSlotKey(target.mode === 'new' && target.slotKey ? target.slotKey : guessSlot(profile.mealSlots, t));
-      setTime(t);
+      const slot = target.mode === 'new' && target.slotKey ? target.slotKey : guessSlot(profile.mealSlots, t);
+      setSlotKey(slot);
+      // En un día anterior la hora de ahora no sirve: se propone la del momento del día.
+      const past = target.mode === 'new' && !!target.date && target.date !== localDate();
+      setTime(past ? profile.mealSlots.find((s) => s.key === slot)?.time ?? '' : t);
       const prefill = target.mode === 'new' ? target.prefill : undefined;
       setDescription(prefill?.description ?? '');
       setItems(prefill ? prefill.items.map(toDraft) : []);
@@ -240,6 +249,7 @@ export function MealSheet({ target, onClose }: Props) {
         editedByUser: i.editedByUser ?? true,
       })));
     const fromAi = cleanItems.some((i) => i.source === 'ia');
+    const newDate = (target?.mode === 'new' && target.date) || localDate();
     const data = {
       slotKey,
       time: time || undefined,
@@ -251,7 +261,7 @@ export function MealSheet({ target, onClose }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const meal = editing ? await updateMeal(editing.id, data) : await addMeal({ ...data, date: localDate(), origin: fromAi ? 'ia' : 'manual' });
+      const meal = editing ? await updateMeal(editing.id, data) : await addMeal({ ...data, date: newDate, origin: fromAi ? 'ia' : 'manual' });
       if (cleanItems.length === 0) {
         onClose();
         return;
@@ -319,6 +329,11 @@ export function MealSheet({ target, onClose }: Props) {
                 Cerrar
               </button>
             </header>
+            {!review && target.mode === 'new' && target.date && target.date !== localDate() && (
+              <p className="sheet-when">
+                Para el {new Date(`${target.date}T12:00:00`).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+            )}
 
             {review ? (
               <MealReview review={review} showNumbers={showCalories} tips={tips} tipsBusy={tipsBusy} canAsk={!!quota?.enabled} onAsk={() => void askTips()} />

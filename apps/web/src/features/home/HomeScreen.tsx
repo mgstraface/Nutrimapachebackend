@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { dayFeedback, emptyDay, formatRange, mascotState, plannedFor, summarizeDay, tipsFor, weekdayIndex, WEEKDAYS, type Meal } from '@nutrimapache/shared';
 import { errorText } from '../../lib/api';
 import { play } from '../../lib/sound';
@@ -9,6 +10,10 @@ import { InspirationSheet } from '../inspiration/InspirationSheet';
 import { CacheteStage } from '../cachete/CacheteStage';
 
 const EVENT_TTL = 6000;
+/** Hasta cuántos días para atrás se puede ir a completar (los días anotados se cargan de los últimos 120). */
+const MAX_BACK = 60;
+const DAY_MS = 864e5;
+const atNoon = (date: string) => new Date(`${date}T12:00:00`);
 
 export function HomeScreen() {
   const profile = useStore((s) => s.profile)!;
@@ -30,29 +35,42 @@ export function HomeScreen() {
   }, []);
 
   const today = localDate(now);
-  const todaysMeals = meals.filter((m) => m.date === today);
-  const dayIdx = weekdayIndex(now);
-  const planned = plannedFor(profile, now);
-  const training = planned;
-  const day = useStore((s) => s.days[today]) ?? emptyDay(today);
+  // Día que se está mirando: hoy, o uno anterior elegido con las flechitas (?dia=YYYY-MM-DD).
+  const [params, setParams] = useSearchParams();
+  const minDate = localDate(new Date(now.getTime() - MAX_BACK * DAY_MS));
+  const picked = params.get('dia');
+  const viewing = picked && /^\d{4}-\d{2}-\d{2}$/.test(picked) && picked < today && picked >= minDate ? picked : today;
+  const isToday = viewing === today;
+  const viewDate = isToday ? now : atNoon(viewing);
+  const goTo = (date: string) => setParams(date >= today ? {} : { dia: date }, { replace: true });
+  const shiftDay = (delta: number) => goTo(localDate(new Date(atNoon(viewing).getTime() + delta * DAY_MS)));
+
+  const todaysMeals = meals.filter((m) => m.date === viewing);
+  const dayIdx = weekdayIndex(viewDate);
+  const planned = plannedFor(profile, viewDate);
+  const training = plannedFor(profile, now);
+  const realDay = useStore((s) => s.days[today]) ?? emptyDay(today);
+  const day = useStore((s) => s.days[viewing]) ?? emptyDay(viewing);
   const daySummary = summarizeDay(day, planned);
   const tomorrow = plannedFor(profile, new Date(now.getTime() + 864e5));
   const [dismissed, dismiss] = useDismissedTips(today);
   const tip = tipsFor({
     hour: now.getHours(),
     profile,
-    today: day,
+    today: realDay,
     loggedSlots: [...new Set(meals.filter((m) => m.date === today).map((m) => m.slotKey))],
-    plannedToday: !!planned,
+    plannedToday: !!training,
     trainsTomorrowMorning: !!tomorrow?.sessions.some((x) => x.moment === 'mañana'),
   }).find((t) => !dismissed.includes(t.id));
 
-  const addWater = async (delta: number) => {
+  /** El botón de la sugerencia siempre suma a hoy, aunque se esté mirando otro día. */
+  const addWater = async (delta: number, date = viewing) => {
     setDayError(null);
     try {
-      const water = Math.max(0, Math.min(30, day.water + delta));
-      if (water === day.water) return;
-      const p = saveDay(today, { water });
+      const current = date === today ? realDay : day;
+      const water = Math.max(0, Math.min(30, current.water + delta));
+      if (water === current.water) return;
+      const p = saveDay(date, { water });
       if (delta > 0) {
         emit('agua-registrada');
         play('agua');
@@ -73,7 +91,7 @@ export function HomeScreen() {
         {
           event: active?.event ?? 'abrir-app',
           hour: now.getHours(),
-          isRestDay: !training || day.status === 'descanso',
+          isRestDay: !training || realDay.status === 'descanso',
           name: profile.mascotName,
           displayName: profile.displayName,
           daysSinceLastLog,
@@ -81,7 +99,7 @@ export function HomeScreen() {
         active?.at ?? 0,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [active?.at, active?.event, now.getHours(), training?.key, day.status, profile.displayName, profile.mascotName, daysSinceLastLog],
+    [active?.at, active?.event, now.getHours(), training?.key, realDay.status, profile.displayName, profile.mascotName, daysSinceLastLog],
   );
 
   const bySlot = (key: string) => todaysMeals.filter((m) => m.slotKey === key);
@@ -91,28 +109,50 @@ export function HomeScreen() {
     <div className="home">
       <section className="den" aria-label={`${profile.mascotName}, tu compañera`}>
         <div className="den-top">
-          <p className="den-date">
-            {WEEKDAYS[dayIdx]} {now.getDate()}
-          </p>
+          <div className="den-nav">
+            <button type="button" className="den-arrow" aria-label="Día anterior" disabled={viewing <= minDate} onClick={() => shiftDay(-1)}>
+              ‹
+            </button>
+            <p className="den-date">
+              {WEEKDAYS[dayIdx]} {viewDate.getDate()}
+            </p>
+            {!isToday && (
+              <button type="button" className="den-arrow" aria-label="Día siguiente" onClick={() => shiftDay(1)}>
+                ›
+              </button>
+            )}
+          </div>
           <button type="button" className={`chip chip-dusk chip-btn-dusk${daySummary ? ' is-logged' : ''}`} onClick={() => setDayOpen(true)}>
             {daySummary ??
-              (training ? `${training.label}${training.moment ? ` · ${training.moment}` : ''}` : 'Día libre')}
+              (planned ? `${planned.label}${planned.moment ? ` · ${planned.moment}` : ''}` : 'Día libre')}
             <span className="chip-edit" aria-hidden="true">
               {daySummary ? '✎' : '+'}
             </span>
           </button>
         </div>
 
-        <CacheteStage base={mood} baseIsEvent={!!active} today={today} day={day} now={now} />
+        <CacheteStage base={mood} baseIsEvent={!!active} today={today} day={realDay} now={now} />
       </section>
 
+      {!isToday && (
+        <div className="past-banner" role="status">
+          <p>
+            Estás completando el{' '}
+            {viewDate.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}.
+          </p>
+          <button type="button" className="btn-quiet btn-small" onClick={() => goTo(today)}>
+            Volver a hoy
+          </button>
+        </div>
+      )}
+
       <section className="day" aria-labelledby="day-title">
-        {tip && (
+        {isToday && tip && (
           <aside className="tip" aria-label={`Sugerencia de ${profile.mascotName}`}>
             <p>{tip.text}</p>
             <div className="tip-actions">
               {tip.action?.kind === 'agua' && (
-                <button type="button" className="btn-primary btn-small" onClick={() => void addWater(1)}>
+                <button type="button" className="btn-primary btn-small" onClick={() => void addWater(1, today)}>
                   {tip.action.label}
                 </button>
               )}
@@ -124,7 +164,7 @@ export function HomeScreen() {
         )}
 
         <h2 id="day-title" className="day-title">
-          Tu día
+          {isToday ? 'Tu día' : 'Ese día'}
         </h2>
         <ol className="path">
           {profile.mealSlots.map((slot) => {
@@ -144,10 +184,10 @@ export function HomeScreen() {
                     list.map((m) => <MealLine key={m.id} meal={m} onOpen={() => openSheet({ mode: 'edit', mealId: m.id })} />)
                   ) : (
                     <div className="path-actions">
-                      <button type="button" className="path-empty" onClick={() => openSheet({ mode: 'new', slotKey: slot.key })}>
+                      <button type="button" className="path-empty" onClick={() => openSheet({ mode: 'new', slotKey: slot.key, date: isToday ? undefined : viewing })}>
                         Anotar cuando quieras
                       </button>
-                      {aiEnabled && (
+                      {aiEnabled && isToday && (
                         <button type="button" className="ideas-btn" onClick={() => setIdeasFor(slot.key)}>
                           <span aria-hidden="true">✨</span> Ideas
                         </button>
@@ -169,12 +209,23 @@ export function HomeScreen() {
           </div>
         )}
 
-        {todaysMeals.length > 0 && <DayGlance items={todaysMeals.flatMap((m) => m.items)} hour={now.getHours()} />}
+        {isToday && hourIsLate(now) && (
+          <button type="button" className="btn-quiet btn-small yesterday-link" onClick={() => shiftDay(-1)}>
+            ¿Te faltó anotar algo de ayer?
+          </button>
+        )}
 
-        <div className="water" aria-label="Agua de hoy">
+        {/* El resumen habla de "hoy": en días anteriores no se muestra */}
+        {isToday && todaysMeals.length > 0 && <DayGlance items={todaysMeals.flatMap((m) => m.items)} hour={now.getHours()} />}
+
+        <div className="water" aria-label={isToday ? 'Agua de hoy' : 'Agua de ese día'}>
           <div>
             <h3>Agua</h3>
-            <p className="hint">{day.water === 0 ? 'Tocá + cada vez que tomes un vaso.' : day.water === 1 ? '1 vaso hoy' : `${day.water} vasos hoy`}</p>
+            <p className="hint">{day.water === 0
+                ? isToday
+                  ? 'Tocá + cada vez que tomes un vaso.'
+                  : 'Sumá los vasos que tomaste ese día.'
+                : `${day.water} ${day.water === 1 ? 'vaso' : 'vasos'} ${isToday ? 'hoy' : 'ese día'}`}</p>
           </div>
           <div className="water-glasses" aria-hidden="true">
             {Array.from({ length: Math.min(day.water, 10) }, (_, i) => (
@@ -198,11 +249,14 @@ export function HomeScreen() {
         )}
       </section>
 
-      <DaySheet open={dayOpen} date={today} planned={planned} onClose={() => setDayOpen(false)} />
+      <DaySheet open={dayOpen} date={viewing} planned={planned} onClose={() => setDayOpen(false)} />
       <InspirationSheet slotKey={ideasFor} onClose={() => setIdeasFor(null)} />
     </div>
   );
 }
+
+/** Pasada la medianoche es fácil olvidarse de la cena: hasta las 5 se ofrece completar ayer. */
+const hourIsLate = (d: Date) => d.getHours() < 5;
 
 /** Sugerencias descartadas hoy. Se guardan solo en este dispositivo: es una comodidad, no un dato. */
 function useDismissedTips(date: string): [string[], (id: string) => void] {

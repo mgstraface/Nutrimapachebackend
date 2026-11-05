@@ -1,5 +1,6 @@
 import { plannedFor, summarizeDay } from '@nutrimapache/shared';
-import { useStore } from '../../lib/store';
+import { Link } from 'react-router-dom';
+import { localDate, useStore } from '../../lib/store';
 
 export function HistoryScreen() {
   const meals = useStore((s) => s.meals);
@@ -16,6 +17,9 @@ export function HistoryScreen() {
     const x = days[d];
     return !!x && (x.status !== null || x.water > 0 || x.energy !== null || x.note !== '');
   };
+  // Hasta acá se puede ir desde el inicio a completar o corregir (mismo límite que las flechitas).
+  const minDate = localDate(new Date(Date.now() - 60 * 864e5));
+  const today = localDate();
   const dates = [...new Set([...Object.keys(byDay), ...Object.keys(days).filter(hasLog)])].sort().reverse();
 
   return (
@@ -31,7 +35,14 @@ export function HistoryScreen() {
           const extras = [move, day && day.water > 0 ? `${day.water} ${day.water === 1 ? 'vaso' : 'vasos'} de agua` : null].filter(Boolean);
           return (
             <section key={d} className="hist-day">
-              <h2>{when.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+              <div className="hist-head">
+                <h2>{when.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+                {d >= minDate && (
+                  <Link className="link hist-edit" to={d === today ? '/' : `/?dia=${d}`}>
+                    Editar
+                  </Link>
+                )}
+              </div>
               {extras.length > 0 && <p className="hist-move">{extras.join(' · ')}</p>}
               {byDay[d] && (
                 <ul>

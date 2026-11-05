@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { MealSheet, type MealSheetTarget } from '../features/meals/MealSheet';
 import { RegisterContext } from '../features/meals/registerContext';
+import { localDate } from '../lib/store';
 
 const tabs = [
   { to: '/', label: 'Hoy', icon: IconHome, end: true },
@@ -12,6 +13,10 @@ const tabs = [
 
 export function Layout() {
   const [target, setTarget] = useState<MealSheetTarget | null>(null);
+  // Si en el inicio se está mirando un día anterior, el "+" anota en ese día.
+  const { pathname, search } = useLocation();
+  const dia = new URLSearchParams(search).get('dia');
+  const pastDate = pathname === '/' && dia && /^\d{4}-\d{2}-\d{2}$/.test(dia) && dia < localDate() ? dia : undefined;
 
   return (
     <RegisterContext.Provider value={setTarget}>
@@ -24,7 +29,7 @@ export function Layout() {
           {tabs.slice(0, 2).map((t) => (
             <Tab key={t.to} {...t} />
           ))}
-          <button type="button" className="tabbar-add" onClick={() => setTarget({ mode: 'new' })} aria-label="Registrar una comida">
+          <button type="button" className="tabbar-add" onClick={() => setTarget({ mode: 'new', date: pastDate })} aria-label="Registrar una comida">
             <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
               <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
             </svg>
