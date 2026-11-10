@@ -4,3 +4,6 @@ dist/
 *.log
 uploads/
 .DS_Store
+
+# compilados accidentales del paquete compartido (se usa el .ts directo)
+packages/shared/src/**/*.js
