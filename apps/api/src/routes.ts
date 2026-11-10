@@ -11,6 +11,9 @@ import {
   mealTarget,
   mealFeedback,
   remainingTarget,
+  weekStart,
+  addDays,
+  weekSummary,
   type DayMeal,
   mealTipsRequestSchema,
   noteInputSchema,
@@ -451,7 +454,15 @@ export function apiRouter(): Router {
       // Las ideas también miran el día: una merienda cargada después de un almuerzo liviano no es algo a corregir.
       const others = await mealsOfDay(req.user!.id, meal.date as string, meal._id);
       const items = (meal.items ?? []) as never;
-      const fb = mealFeedback(profile, meal.slotKey as string, items, true, others, (meal.time as string | undefined) ?? undefined);
+      // …y la semana: un finde más cargado después de una semana liviana no es algo a corregir.
+      const ws = weekStart(meal.date as string);
+      const weekDocs = await Meal.find({ userId: req.user!.id, date: { $gte: ws, $lte: addDays(ws, 6) } }).lean();
+      const week = weekSummary(
+        profile,
+        weekDocs.map((m) => ({ date: m.date as string, slotKey: m.slotKey as string, time: (m.time as string | undefined) ?? undefined, items: (m.items ?? []) as never })),
+        meal.date as string,
+      );
+      const fb = mealFeedback(profile, meal.slotKey as string, items, true, others, (meal.time as string | undefined) ?? undefined, week?.flex);
       const label = (key: string) => profile.mealSlots.find((s) => s.key === key)?.label ?? 'Otra cosa';
       const out = await withAi(req, res, 'mejora', () =>
         generateMealTips({
@@ -464,6 +475,7 @@ export function apiRouter(): Router {
             ? {
                 ...fb.day,
                 verdict: fb.level,
+                week: week && week.level !== 'arranca' ? week.line : undefined,
                 meals: others.map((o) => `${label(o.slotKey)}: ${o.items.map((i) => `${i.name}${i.quantity ? ` ${i.quantity} ${i.unit ?? 'g'}` : ''}`).join(', ') || 'sin detalle'}`),
               }
             : null,

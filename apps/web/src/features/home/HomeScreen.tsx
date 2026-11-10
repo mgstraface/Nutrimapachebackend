@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { dayFeedback, emptyDay, formatRange, mascotState, plannedFor, summarizeDay, tipsFor, weekdayIndex, WEEKDAYS, type Meal } from '@nutrimapache/shared';
+import { dayFeedback, emptyDay, formatRange, mascotState, plannedFor, summarizeDay, tipsFor, weekdayIndex, weekSummary, WEEKDAYS, type Meal, type WeekSummary } from '@nutrimapache/shared';
 import { errorText } from '../../lib/api';
 import { play } from '../../lib/sound';
 import { localDate, useStore } from '../../lib/store';
@@ -52,6 +52,8 @@ export function HomeScreen() {
   const realDay = useStore((s) => s.days[today]) ?? emptyDay(today);
   const day = useStore((s) => s.days[viewing]) ?? emptyDay(viewing);
   const daySummary = summarizeDay(day, planned);
+  // La semana del día que se mira (los días anteriores a ese cuentan como terminados).
+  const week = useMemo(() => weekSummary(profile, meals, viewing, profile.view.showCalories), [profile, meals, viewing]);
   const tomorrow = plannedFor(profile, new Date(now.getTime() + 864e5));
   const [dismissed, dismiss] = useDismissedTips(today);
   const tip = tipsFor({
@@ -216,7 +218,10 @@ export function HomeScreen() {
         )}
 
         {/* El resumen habla de "hoy": en días anteriores no se muestra */}
-        {isToday && todaysMeals.length > 0 && <DayGlance items={todaysMeals.flatMap((m) => m.items)} hour={now.getHours()} />}
+        {isToday && todaysMeals.length > 0 && (
+          <DayGlance items={todaysMeals.flatMap((m) => m.items)} hour={now.getHours()} weekFlex={week?.flex} />
+        )}
+        {week && <WeekGlance week={week} viewing={viewing} onPick={goTo} />}
 
         <div className="water" aria-label={isToday ? 'Agua de hoy' : 'Agua de ese día'}>
           <div>
@@ -293,9 +298,9 @@ function MealLine({ meal, onOpen }: { meal: Meal; onOpen: () => void }) {
 }
 
 /** Resumen suave del día: una frase y una barrita contra el rango diario (cifras solo si las quiere ver). */
-function DayGlance({ items, hour }: { items: Meal['items']; hour: number }) {
+function DayGlance({ items, hour, weekFlex }: { items: Meal['items']; hour: number; weekFlex?: number }) {
   const profile = useStore((s) => s.profile)!;
-  const fb = dayFeedback(profile, items, hour);
+  const fb = dayFeedback(profile, items, hour, weekFlex);
   if (!fb) return null;
   const show = profile.view.showCalories;
   const pct = Math.min(100, Math.round(fb.progress * 100 * (1 / 1.3)));
@@ -317,6 +322,55 @@ function DayGlance({ items, hour }: { items: Meal['items']; hour: number }) {
             </p>
           )}
         </>
+      )}
+    </aside>
+  );
+}
+
+const WEEK_LETTERS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+/**
+ * La semana de un vistazo: una barrita por día (la franja es el rango diario),
+ * cómo viene en total y cuánto margen queda. Tocar un día pasado lleva a ese día.
+ */
+function WeekGlance({ week, viewing, onPick }: { week: WeekSummary; viewing: string; onPick: (date: string) => void }) {
+  const show = useStore((s) => s.profile!.view.showCalories);
+  const { min, max } = week.energy.kcal;
+  const top = max * 1.6;
+  const h = (n: number) => `${Math.min(100, (n / top) * 100)}%`;
+  return (
+    <aside className="glance week" aria-label="Cómo viene la semana">
+      <p className="week-title">Tu semana</p>
+      <div className="week-bars">
+        <span className="week-band" style={{ bottom: h(min), height: `calc(${h(max)} - ${h(min)})` }} aria-hidden="true" />
+        {week.days.map((d) => {
+          const k = d.kcal ? (d.kcal.min + d.kcal.max) / 2 : 0;
+          const state = d.kind === 'futuro' ? 'futuro' : d.assumed ? 'sin-anotar' : k > max * 1.1 ? 'alto' : k < min * 0.8 && d.kind === 'pasado' ? 'bajo' : 'ok';
+          const label = new Date(`${d.date}T12:00:00`).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' });
+          return (
+            <button
+              key={d.date}
+              type="button"
+              className={`week-day is-${state}${d.kind === 'hoy' ? ' is-today' : ''}${d.date === viewing ? ' is-viewing' : ''}`}
+              disabled={d.kind === 'futuro'}
+              onClick={() => onPick(d.date)}
+              aria-label={`${label}${d.assumed ? ', sin anotar' : show && d.kcal ? `, ${formatRange(d.kcal)} kcal` : ''}`}
+            >
+              <span className="week-col">
+                {d.kind !== 'futuro' && <span className="week-fill" style={{ height: d.assumed ? h(min) : h(k) }} />}
+              </span>
+              <span className="week-letter">{WEEK_LETTERS[d.index]}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p>{week.line}</p>
+      {week.care && <p className="hint">{week.care}</p>}
+      {show && week.level !== 'arranca' && (
+        <p className="hint">
+          Llevás {formatRange(week.soFar)} de {formatRange(week.target)} kcal en la semana
+          {week.days.some((d) => d.assumed || d.filled > 0) ? ' · lo que no anotaste lo cuento como típico' : ''}
+        </p>
       )}
     </aside>
   );

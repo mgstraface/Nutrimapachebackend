@@ -82,7 +82,7 @@ function cameBefore(profile: Profile, order: string[], other: DayMeal, slotKey: 
 }
 
 /** Calorías de una comida anotada; si no tiene cantidades, las de una comida típica de ese momento. */
-function mealKcal(profile: Profile, energy: EnergyEstimate, m: DayMeal): Range {
+export function estimateMealKcal(profile: Profile, energy: EnergyEstimate, m: DayMeal): Range {
   const k = sumRanges(m.items.map((i) => i.kcal));
   if (k) return k;
   return profile.mealSlots.some((s) => s.key === m.slotKey) ? mealTarget(profile, m.slotKey, energy).kcal : ZERO;
@@ -112,7 +112,7 @@ export function dayContext(
 
   const missing = upTo.filter((s) => s.key !== slotKey && !before.some((m) => m.slotKey === s.key));
   const soFar = [
-    ...before.map((m) => mealKcal(profile, energy, m)),
+    ...before.map((m) => estimateMealKcal(profile, energy, m)),
     ...missing.map((s) => mealTarget(profile, s.key, energy).kcal),
   ].reduce(add, thisKcal);
 
@@ -127,6 +127,8 @@ export function dayContext(
  * una merienda más cargada después de un almuerzo liviano no es "generosa", el día viene equilibrado.
  * numbers=false: misma devolución pero sin cifras (para quien eligió no ver calorías).
  * others: las demás comidas de ese mismo día (sin esta).
+ * weekBank: cuánto de más se le perdona al día por el margen de la semana (WeekSummary.flex).
+ *   Si el día se pasa pero la semana tiene margen de sobra, no se marca como generosa.
  */
 export function mealFeedback(
   profile: Profile,
@@ -135,6 +137,7 @@ export function mealFeedback(
   numbers = true,
   others: DayMeal[] = [],
   time?: string,
+  weekBank?: number,
 ): MealFeedback {
   const kcal = sumRanges(items.map((i) => i.kcal));
   const protein = sumRanges(items.map((i) => i.protein));
@@ -151,7 +154,9 @@ export function mealFeedback(
   if (kcal && energy && !target) {
     // Algo fuera de los momentos del día (un "extra"): no tiene porción propia, se mira solo el día.
     const day = dayContext(profile, energy, slotKey, kcal, others, time);
-    const high = mid(day.soFar) > energy.kcal.max * 1.1;
+    const over = mid(day.soFar) - energy.kcal.max;
+    const covered = over > 0 && weekBank !== undefined && weekBank >= over;
+    const high = mid(day.soFar) > energy.kcal.max * 1.1 && !covered;
     if (!hasPlant && items.length > 0 && !high) suggestions.push('Una verdura o una fruta al lado suma fibra y saciedad.');
     return {
       level: high ? 'generosa' : 'dentro',
@@ -161,7 +166,9 @@ export function mealFeedback(
       groups,
       headline: high
         ? 'Con esto el día vino generoso. Tranqui: un día no define nada, mañana seguimos con lo de siempre 💛'
-        : '¡Anotada! Con esto el día sigue bien 👌',
+        : covered
+          ? '¡Anotada! El día vino generoso, pero la semana venía con margen: entra bien 👌'
+          : '¡Anotada! Con esto el día sigue bien 👌',
       suggestions: suggestions.slice(0, 2),
     };
   }
@@ -203,6 +210,9 @@ export function mealFeedback(
         ? // Hay comidas antes sin anotar: no sabemos cómo viene el día, así que no lo damos por "completito".
           `Vino un poquito más generosa de lo que te sugiero para ${slotName}${more}. Si las comidas de antes fueron livianas, anotalas y la miro con el día entero.`
         : `Vino un poquito más generosa de lo que te sugiero para ${slotName}${more}. Nada grave: el día recién arranca y se acomoda solo.`;
+  } else if (slotHigh && weekBank !== undefined && weekBank >= mid(day.soFar) - day.expected.max) {
+    // El día viene cargado, pero la semana tiene margen de sobra (p. ej. un finde después de una semana liviana).
+    headline = `Más generosa de lo habitual para ${slotName}, pero la semana viene con margen, así que entra bien 👌`;
   } else if (slotHigh) {
     level = 'generosa';
     const diff = round10(mid(day.soFar) - day.expected.max);
@@ -247,7 +257,7 @@ export function remainingTarget(profile: Profile, slotKey: string, energy: Energ
   const weightOf = (key: string) => mid(mealTarget(profile, key, energy).kcal);
   const share = weightOf(slotKey) / pending.reduce((n, s) => n + weightOf(s.key), 0);
 
-  const eaten = others.reduce((acc, m) => add(acc, mealKcal(profile, energy, m)), ZERO);
+  const eaten = others.reduce((acc, m) => add(acc, estimateMealKcal(profile, energy, m)), ZERO);
   const eatenProt = others.reduce((acc, m) => add(acc, sumRanges(m.items.map((i) => i.protein)) ?? ZERO), ZERO);
   const clamp = (v: number, b: Range) => Math.min(b.max * 1.6, Math.max(b.min * 0.7, v));
   const kMin = round50(clamp((energy.kcal.min - mid(eaten)) * share, base.kcal));
@@ -267,7 +277,7 @@ export interface DayFeedback {
 }
 
 /** Resumen suave del día con lo anotado hasta ahora. */
-export function dayFeedback(profile: Profile, items: MealItem[], hour: number): DayFeedback | null {
+export function dayFeedback(profile: Profile, items: MealItem[], hour: number, weekBank?: number): DayFeedback | null {
   const energy = estimateEnergy(profile);
   if (!energy) return null;
   const kcal = sumRanges(items.map((i) => i.kcal));
@@ -275,6 +285,8 @@ export function dayFeedback(profile: Profile, items: MealItem[], hour: number): 
   const progress = kcal ? mid(kcal) / mid(energy.kcal) : 0;
   let line: string;
   if (!kcal) line = 'Cuando anotes comidas con cantidades, acá vas a ver cómo viene el día.';
+  else if (mid(kcal) > energy.kcal.max * 1.1 && weekBank !== undefined && weekBank >= mid(kcal) - energy.kcal.max)
+    line = 'Hoy vino un día generoso, pero la semana venía con margen: entra bien 👌';
   else if (mid(kcal) > energy.kcal.max * 1.1)
     line = 'Hoy vino un día generoso. Tranqui: un día no define nada, mañana seguimos con lo de siempre 💛';
   else if (hour >= 20 && mid(kcal) < energy.kcal.min * 0.7)

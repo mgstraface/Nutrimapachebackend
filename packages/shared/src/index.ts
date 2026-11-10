@@ -12,3 +12,4 @@ export * from './look';
 export * from './moments';
 export * from './feedback';
 export * from './foods';
+export * from './week';

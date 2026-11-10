@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { estimateFromFood, fillFromCatalog, formatRange, matchFood, mealFeedback, searchFoods, sumRanges, type Food, type AnalysisQuota, type Meal, type MealFeedback, type MealItem, type MealTipsResponse, type PhotoAnalysis, type Range } from '@nutrimapache/shared';
+import { estimateFromFood, fillFromCatalog, formatRange, matchFood, mealFeedback, searchFoods, weekSummary, sumRanges, type Food, type AnalysisQuota, type Meal, type MealFeedback, type MealItem, type MealTipsResponse, type PhotoAnalysis, type Range } from '@nutrimapache/shared';
 import { Cachete } from '../../mascot/Cachete';
 import { api, errorText } from '../../lib/api';
 import { preparePhoto } from '../../lib/photo';
@@ -267,8 +267,11 @@ export function MealSheet({ target, onClose }: Props) {
         return;
       }
       // Antes de opinar se mira el día entero: las demás comidas de esa fecha (sin esta).
-      const others = useStore.getState().meals.filter((x) => x.date === meal.date && x.id !== meal.id);
-      setReview({ meal, fb: mealFeedback(profile, slotKey, cleanItems, profile.view.showCalories, others, meal.time) });
+      const all = useStore.getState().meals;
+      const others = all.filter((x) => x.date === meal.date && x.id !== meal.id);
+      // …y la semana: si viene con margen, un día más cargado (un finde, por ejemplo) no se marca.
+      const week = weekSummary(profile, all, meal.date);
+      setReview({ meal, fb: mealFeedback(profile, slotKey, cleanItems, profile.view.showCalories, others, meal.time, week?.flex) });
       setBusy(false);
     } catch (err) {
       setError(errorText(err));

@@ -331,7 +331,7 @@ Reglas:
 - Tono cálido y breve, en español rioplatense, una oración cada idea. Empezá con un verbo ("Probá…", "Sumale…", "La próxima…").
 - Nada de culpa ni de dieta: no uses "mal", "exceso", "te pasaste", "prohibido", "compensar", "light", "quemar". No sugieras saltear comidas ni ayunos.
 - Si la comida ya está equilibrada, una de las ideas puede ser solo para variar o hacerla más rica.
-- Mirá el día entero, no solo esta comida: si vino más cargada que lo típico pero el día viene equilibrado o liviano, no lo trates como algo a corregir (no sugieras achicarla); en ese caso las ideas son para sumar nutrientes o variar. Si el día viene liviano, nunca sugieras comer menos.
+- Mirá el día entero, no solo esta comida: si vino más cargada que lo típico pero el día viene equilibrado o liviano, no lo trates como algo a corregir (no sugieras achicarla); en ese caso las ideas son para sumar nutrientes o variar. Si el día viene liviano, nunca sugieras comer menos. Lo mismo con la semana: si viene con margen, un día más cargado (típico del finde) está bien; si viene por encima, nunca propongas compensar comiendo de menos.
 Respondé solo usando la herramienta dar_ideas.`;
 
 const TIPS_TOOL = {
@@ -353,7 +353,7 @@ export async function generateMealTips(ctx: {
   items: MealItem[];
   target: { kcal: Range; protein: Range } | null;
   /** Cómo viene el día (lo comido antes, lo esperable a esta altura) y qué concluyó la miradita */
-  day: { soFar: Range; expected: Range; day: Range; balance: string; verdict: string; meals: string[] } | null;
+  day: { soFar: Range; expected: Range; day: Range; balance: string; verdict: string; meals: string[]; week?: string } | null;
 }): Promise<{ tips: string[]; usage: Usage }> {
   const total = sumRanges(ctx.items.map((i) => i.kcal));
   const prot = sumRanges(ctx.items.map((i) => i.protein));
@@ -371,6 +371,7 @@ export async function generateMealTips(ctx: {
           ctx.day.balance === 'adelante' ? 'El día viene más cargado de lo esperable.' : ctx.day.balance === 'atras' ? 'El día viene más liviano de lo esperable.' : 'El día viene equilibrado.'
         }`
       : '',
+    ctx.day?.week ? `Cómo viene la semana: ${ctx.day.week}` : '',
   ].filter(Boolean);
   const { input, usage } = await callClaude({ system: TIPS_SYSTEM, tool: TIPS_TOOL, maxTokens: 400, content: [{ type: 'text', text: lines.join('\n') }] });
   const tips = (Array.isArray(input.ideas) ? input.ideas : [])

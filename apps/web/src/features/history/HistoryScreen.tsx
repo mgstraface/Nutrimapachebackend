@@ -1,4 +1,4 @@
-import { plannedFor, summarizeDay } from '@nutrimapache/shared';
+import { addDays, formatRange, plannedFor, summarizeDay, weekPattern, weekStart, weekSummary, type Meal, type Profile } from '@nutrimapache/shared';
 import { Link } from 'react-router-dom';
 import { localDate, useStore } from '../../lib/store';
 
@@ -25,6 +25,7 @@ export function HistoryScreen() {
   return (
     <div className="page">
       <h1 className="page-title">Historial</h1>
+      <WeeksOverview profile={profile} meals={meals} today={today} />
       {dates.length === 0 ? (
         <p className="empty">Cuando anotes tu primera comida, la vas a ver acá.</p>
       ) : (
@@ -63,5 +64,54 @@ export function HistoryScreen() {
         })
       )}
     </div>
+  );
+}
+
+const WEEK_STATE = { margen: 'con margen', 'en-linea': 'pareja', arriba: 'un poco por encima', arranca: 'recién arranca' } as const;
+
+/** Las últimas semanas en total y cómo se come entre semana vs. el finde. */
+function WeeksOverview({ profile, meals, today }: { profile: Profile; meals: Meal[]; today: string }) {
+  const show = profile.view.showCalories;
+  const current = weekStart(today);
+  const weeks = [0, 1, 2, 3]
+    .map((back) => {
+      const start = addDays(current, -7 * back);
+      // Semanas pasadas: se miran desde el lunes siguiente, así cuentan los 7 días como terminados.
+      const w = weekSummary(profile, meals, back === 0 ? today : addDays(start, 7), show);
+      return w && w.loggedDays + (back === 0 && w.days.some((d) => d.kind === 'hoy' && d.kcal) ? 1 : 0) >= 2 ? { start, back, w } : null;
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+  const pattern = weekPattern(profile, meals, today);
+  if (!weeks.length && !pattern?.line) return null;
+
+  const fmt = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+  return (
+    <section className="hist-weeks glance" aria-label="Tus semanas">
+      <p className="week-title">Tus semanas</p>
+      {weeks.length > 0 && (
+        <ul>
+          {weeks.map(({ start, back, w }) => (
+            <li key={start}>
+              <span>
+                {back === 0 ? 'Esta semana' : `${fmt(start)} – ${fmt(addDays(start, 6))}`}
+                {show && <span className="hint"> · {formatRange(w.soFar)} de {formatRange(w.target)} kcal</span>}
+              </span>
+              <span className="hist-week-state">{WEEK_STATE[w.level]}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {pattern?.line && (
+        <p>
+          {pattern.line}
+          {show && pattern.weekday && pattern.weekend && (
+            <span className="hint">
+              {' '}
+              Entre semana ≈ {formatRange(pattern.weekday)} kcal por día; el finde ≈ {formatRange(pattern.weekend)}.
+            </span>
+          )}
+        </p>
+      )}
+    </section>
   );
 }
