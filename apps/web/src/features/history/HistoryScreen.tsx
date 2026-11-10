@@ -1,4 +1,4 @@
-import { addDays, formatRange, plannedFor, summarizeDay, weekPattern, weekStart, weekSummary, type Meal, type Profile } from '@nutrimapache/shared';
+import { addDays, bodyProgress, formatRange, plannedFor, summarizeDay, weekPattern, weekStart, weekSummary, type Meal, type Profile } from '@nutrimapache/shared';
 import { Link } from 'react-router-dom';
 import { localDate, useStore } from '../../lib/store';
 
@@ -25,6 +25,7 @@ export function HistoryScreen() {
   return (
     <div className="page">
       <h1 className="page-title">Historial</h1>
+      <ProgressCard />
       <WeeksOverview profile={profile} meals={meals} today={today} />
       {dates.length === 0 ? (
         <p className="empty">Cuando anotes tu primera comida, la vas a ver acá.</p>
@@ -113,5 +114,23 @@ function WeeksOverview({ profile, meals, today }: { profile: Profile; meals: Mea
         </p>
       )}
     </section>
+  );
+}
+
+/** Acceso a "Tu progreso" con el último peso. */
+function ProgressCard() {
+  const profile = useStore((s) => s.profile)!;
+  const body = useStore((s) => s.body);
+  const p = bodyProgress(profile, body);
+  return (
+    <Link to="/progreso" className="glance progress-card">
+      <span className="week-title">Tu progreso</span>
+      <span>
+        {p.last
+          ? `Último peso: ${p.last.value.toLocaleString('es-AR')} kg${p.change !== undefined ? ` (${p.change > 0 ? '+' : p.change < 0 ? '−' : ''}${Math.abs(p.change).toLocaleString('es-AR')} kg desde que empezaste)` : ''}`
+          : 'Anotá tu peso y medidas para ver cómo vas avanzando.'}
+      </span>
+      <span className="link">{p.last ? 'Ver y anotar ›' : 'Anotar ›'}</span>
+    </Link>
   );
 }

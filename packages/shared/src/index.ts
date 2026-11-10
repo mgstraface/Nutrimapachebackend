@@ -13,3 +13,4 @@ export * from './moments';
 export * from './feedback';
 export * from './foods';
 export * from './week';
+export * from './body';

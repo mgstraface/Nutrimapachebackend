@@ -11,7 +11,7 @@ import { onHead } from './Cachete';
  * - mover el dedo → los ojos lo siguen
  * Coordenadas convertidas al dibujo (viewBox 0 0 200 220).
  */
-export type Gesture = { kind: 'tap'; x: number; y: number } | { kind: 'double' } | { kind: 'hold' } | { kind: 'rock' } | { kind: 'rub' };
+export type Gesture = { kind: 'tap'; x: number; y: number } | { kind: 'double'; x: number; y: number } | { kind: 'hold' } | { kind: 'rock' } | { kind: 'rub' };
 
 const HOLD_MS = 550;
 const DOUBLE_MS = 280;
@@ -149,7 +149,7 @@ export function useCacheteGestures(onGesture: (g: Gesture) => void) {
     if (now - s.lastTap.t < DOUBLE_MS && Math.hypot(p.x - s.lastTap.x, p.y - s.lastTap.y) < 40) {
       clearTimeout(s.tapTimer);
       s.lastTap.t = 0;
-      cb.current({ kind: 'double' });
+      cb.current({ kind: 'double', x: p.x, y: p.y });
       return;
     }
     s.lastTap = { t: now, x: p.x, y: p.y };
@@ -165,6 +165,7 @@ export function useCacheteGestures(onGesture: (g: Gesture) => void) {
   return {
     ref,
     lookAt,
-    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onPointerLeave: onPointerCancel },
+    // Sin onPointerLeave: en Safari, si el dedo sale del dibujo mientras la mecés, cortaba el gesto.
+    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel },
   };
 }

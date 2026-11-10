@@ -6,6 +6,7 @@ import { HomeScreen } from '../features/home/HomeScreen';
 import { LoginScreen } from '../features/auth/LoginScreen';
 import { OnboardingScreen } from '../features/onboarding/OnboardingScreen';
 import { HistoryScreen } from '../features/history/HistoryScreen';
+import { ProgressScreen } from '../features/progress/ProgressScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { AdminScreen } from '../features/admin/AdminScreen';
 import { RecipesScreen } from '../features/recipes/RecipesScreen';
@@ -58,6 +59,7 @@ export function App() {
             <Route path="recetas" element={<RecipesScreen />} />
             <Route path="semana" element={<Navigate to="/recetas" replace />} />
             <Route path="historial" element={<HistoryScreen />} />
+            <Route path="progreso" element={<ProgressScreen />} />
             <Route path="yo" element={<SettingsScreen />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

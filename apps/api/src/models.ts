@@ -213,6 +213,38 @@ export function toSpecial(doc: any) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+/* Peso y medidas: uno por día. Solo lo ve la usuaria. */
+const bodySchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, required: true },
+    date: { type: String, required: true },
+    weightKg: { type: Number, default: null },
+    waistCm: { type: Number, default: null },
+    hipCm: { type: Number, default: null },
+    chestCm: { type: Number, default: null },
+    armCm: { type: Number, default: null },
+    thighCm: { type: Number, default: null },
+    note: { type: String, default: '' },
+  },
+  { timestamps: true, minimize: false },
+);
+bodySchema.index({ userId: 1, date: -1 }, { unique: true });
+export const BodyEntry = mongoose.model('BodyEntry', bodySchema);
+
+export function toBody(doc: any) {
+  return {
+    date: doc.date,
+    weightKg: doc.weightKg ?? null,
+    waistCm: doc.waistCm ?? null,
+    hipCm: doc.hipCm ?? null,
+    chestCm: doc.chestCm ?? null,
+    armCm: doc.armCm ?? null,
+    thighCm: doc.thighCm ?? null,
+    note: doc.note ?? '',
+    updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : undefined,
+  };
+}
+
 export function toDay(doc: any) {
   return {
     date: doc.date,

@@ -5,6 +5,7 @@ import {
   createUserSchema,
   GOAL_LABELS,
   dayLogSchema,
+  bodyEntrySchema,
   estimateEnergy,
   inspirationRequestSchema,
   loginSchema,
@@ -46,7 +47,7 @@ import {
 import { AnalysisError, analyzePhoto, analyzeText, generateIdeas, generateMealTips, generatePantryRecipes, todayAR, type Usage } from './analysis';
 import { dbReady } from './config/db';
 import { env } from './config/env';
-import { AiUsage, Day, FoodItem, Meal, Note, Profile, SavedRecipe, SpecialDate, User, toDay, toFood, toMeal, toNote, toRecipe, toSessionUser, toSpecial } from './models';
+import { AiUsage, BodyEntry, Day, FoodItem, Meal, Note, Profile, SavedRecipe, SpecialDate, User, toBody, toDay, toFood, toMeal, toNote, toRecipe, toSessionUser, toSpecial } from './models';
 
 /** Comidas anotadas de una fecha, en la forma mínima que usa el análisis del día. */
 async function mealsOfDay(userId: string, date: string, skipId?: unknown): Promise<DayMeal[]> {
@@ -241,6 +242,50 @@ export function apiRouter(): Router {
         { upsert: true, new: true, setDefaultsOnInsert: true },
       ).lean();
       res.json(toDay(doc));
+    }),
+  );
+
+  /* ---------------- peso y medidas ---------------- */
+
+  r.get(
+    '/body',
+    requireUser,
+    h(async (req, res) => {
+      const docs = await BodyEntry.find({ userId: req.user!.id }).sort({ date: 1 }).limit(2000).lean();
+      res.json(docs.map(toBody));
+    }),
+  );
+
+  r.put(
+    '/body/:date',
+    requireUser,
+    h(async (req, res) => {
+      const date = req.params.date!;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayAR()) {
+        res.status(400).json({ error: 'Fecha inválida' });
+        return;
+      }
+      const data = bodyEntrySchema.parse(req.body);
+      const doc = await BodyEntry.findOneAndUpdate({ userId: req.user!.id, date }, { $set: data }, { upsert: true, new: true, setDefaultsOnInsert: true }).lean();
+      // Si es el peso más reciente, también pasa a ser el peso del perfil (así el rango de energía queda al día)
+      let profileWeight: number | null = null;
+      if (data.weightKg !== null) {
+        const newer = await BodyEntry.exists({ userId: req.user!.id, date: { $gt: date }, weightKg: { $ne: null } });
+        if (!newer) {
+          await Profile.updateOne({ userId: req.user!.id }, { $set: { 'data.weightKg': data.weightKg } });
+          profileWeight = data.weightKg;
+        }
+      }
+      res.json({ entry: toBody(doc), profileWeight });
+    }),
+  );
+
+  r.delete(
+    '/body/:date',
+    requireUser,
+    h(async (req, res) => {
+      await BodyEntry.deleteOne({ userId: req.user!.id, date: req.params.date });
+      res.status(204).end();
     }),
   );
 
@@ -607,6 +652,7 @@ export function apiRouter(): Router {
         days: days.map(toDay),
         notes: (await Note.find({ userId: req.user!.id, openedAt: { $ne: null } }).lean()).map(toNote),
         recipes: (await SavedRecipe.find({ userId: req.user!.id }).lean()).map(toRecipe),
+        body: (await BodyEntry.find({ userId: req.user!.id }).sort({ date: 1 }).lean()).map(toBody),
       });
     }),
   );
@@ -621,6 +667,7 @@ export function apiRouter(): Router {
         Meal.deleteMany({ userId: req.user!.id }),
         Day.deleteMany({ userId: req.user!.id }),
         SavedRecipe.deleteMany({ userId: req.user!.id }),
+        BodyEntry.deleteMany({ userId: req.user!.id }),
       ]);
       res.status(204).end();
     }),
@@ -724,6 +771,7 @@ export function apiRouter(): Router {
         Note.deleteMany({ userId: id }),
         SpecialDate.deleteMany({ userId: id }),
         SavedRecipe.deleteMany({ userId: id }),
+        BodyEntry.deleteMany({ userId: id }),
         Profile.deleteOne({ userId: id }),
         endAllSessions(String(id)),
         User.deleteOne({ _id: id }),

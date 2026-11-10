@@ -278,7 +278,19 @@ export function CacheteStage({ base, baseIsEvent, today, day, now }: Props) {
       void deliverNote();
       return;
     }
-    if (g.kind === 'double') return doAction('baile');
+    if (g.kind === 'double') {
+      // Toques rápidos en la panza son cosquillas (dos), no baile: así sale el ataque de risa
+      if (zoneAt(g.x, g.y, base.expression, action) === 'panza') {
+        const now = Date.now();
+        tickles.current = [...tickles.current.filter((t) => now - t < TICKLE_WINDOW_MS), now, now];
+        if (tickles.current.length >= 3) {
+          tickles.current = [];
+          return doAction('risa');
+        }
+        return doAction('cosquillas');
+      }
+      return doAction('baile');
+    }
     if (g.kind === 'hold') return doAction('abrazo');
     if (g.kind === 'rock') return doAction(night ? 'dormida' : 'mareo');
     if (g.kind === 'rub') return doAction('rascar');

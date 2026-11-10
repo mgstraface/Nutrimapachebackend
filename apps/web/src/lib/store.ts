@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { emptyDay, setFoods, type Food, type AnalysisQuota, type DayLog, type Meal, type MealInput, type MascotEvent, type Moments, type Note, type Profile, type SessionUser } from '@nutrimapache/shared';
+import { emptyDay, setFoods, type BodyEntry, type BodyEntryInput, type Food, type AnalysisQuota, type DayLog, type Meal, type MealInput, type MascotEvent, type Moments, type Note, type Profile, type SessionUser } from '@nutrimapache/shared';
 import { setSoundEnabled } from './sound';
 import { ApiError, api } from './api';
 
@@ -40,6 +40,10 @@ interface State {
   deleteMeal: (id: string) => Promise<void>;
   /** Guarda cambios de un día; lo que no se pasa queda como estaba. */
   saveDay: (date: string, patch: Partial<Omit<DayLog, 'date' | 'updatedAt'>>) => Promise<void>;
+  /** Peso y medidas, de la más vieja a la más nueva */
+  body: BodyEntry[];
+  saveBody: (date: string, entry: BodyEntryInput) => Promise<void>;
+  deleteBody: (date: string) => Promise<void>;
   wipeData: () => Promise<void>;
   emit: (event: MascotEvent) => void;
 }
@@ -76,6 +80,9 @@ export const useStore = create<State>()((set, get) => {
     setSoundEnabled(me.profile?.view.sound !== false);
     void get().refreshAi();
     void get().loadMoments();
+    void api<BodyEntry[]>('/body')
+      .then((body) => set({ body }))
+      .catch(() => undefined);
     // Catálogo de alimentos editable por el admin (si falla, queda el que viene con la app)
     void api<Food[]>('/foods')
       .then((list) => list.length && setFoods(list))
@@ -89,6 +96,7 @@ export const useStore = create<State>()((set, get) => {
     profile: null,
     meals: [],
     days: {},
+    body: [],
     ai: null,
     moments: { notes: [], special: [] },
     lastEvent: null,
@@ -135,7 +143,7 @@ export const useStore = create<State>()((set, get) => {
       try {
         await api('/auth/logout', { method: 'POST' });
       } finally {
-        set({ status: 'anon', user: null, profile: null, meals: [], days: {}, lastEvent: null });
+        set({ status: 'anon', user: null, profile: null, meals: [], days: {}, body: [], lastEvent: null });
       }
     },
 
@@ -178,9 +186,23 @@ export const useStore = create<State>()((set, get) => {
       }
     },
 
+    saveBody: async (date, entry) => {
+      const r = await api<{ entry: BodyEntry; profileWeight: number | null }>(`/body/${date}`, { method: 'PUT', body: entry });
+      set((s) => ({
+        body: [...s.body.filter((b) => b.date !== date), r.entry].sort((a, b) => a.date.localeCompare(b.date)),
+        // El peso más reciente pasa al perfil (lo hace el servidor): así el rango de energía queda al día
+        profile: r.profileWeight !== null && s.profile ? { ...s.profile, weightKg: r.profileWeight } : s.profile,
+      }));
+    },
+
+    deleteBody: async (date) => {
+      await api(`/body/${date}`, { method: 'DELETE' });
+      set((s) => ({ body: s.body.filter((b) => b.date !== date) }));
+    },
+
     wipeData: async () => {
       await api('/privacy/data', { method: 'DELETE' });
-      set({ profile: null, meals: [], days: {}, lastEvent: null });
+      set({ profile: null, meals: [], days: {}, body: [], lastEvent: null });
     },
 
     emit: (event) => set({ lastEvent: { event, at: Date.now() } }),

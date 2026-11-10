@@ -1995,3 +1995,115 @@ textarea {
 .bulk-errors p {
   margin: 0;
 }
+
+/* ---------- Tu progreso (peso y medidas) ---------- */
+.progress-card {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.progress-summary {
+  margin-bottom: 20px;
+}
+.progress-hero {
+  display: grid;
+  gap: 2px;
+}
+.progress-big {
+  font-family: var(--font-display);
+  font-size: var(--step-3);
+  font-weight: 800;
+  line-height: 1.1;
+}
+.progress-measures,
+.progress-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.progress-measures li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.progress-form {
+  display: grid;
+  gap: 12px;
+}
+.progress-form .btn-quiet {
+  justify-self: start;
+}
+.progress-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.progress-row {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.progress-row-date {
+  font-size: var(--step--1);
+  color: var(--ink-2);
+  text-transform: capitalize;
+}
+.weight-chart {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.weight-chart svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  touch-action: pan-y;
+}
+.wc-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.wc-axis {
+  font-size: 10px;
+  fill: var(--ink-2);
+}
+.wc-line {
+  fill: none;
+  stroke: #2a8fb8;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.wc-dot {
+  fill: #2a8fb8;
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+.wc-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+.wc-cross {
+  stroke: var(--fur);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.wc-tip {
+  font-size: var(--step--1);
+  color: var(--ink);
+}

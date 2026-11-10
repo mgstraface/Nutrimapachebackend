@@ -100,7 +100,7 @@ export function SettingsScreen() {
           type="button"
           className="btn-quiet"
           onClick={async () => {
-            if (!confirm('Esto borra tu perfil y todas tus comidas. Tu cuenta sigue existiendo y podés volver a empezar. ¿Seguimos?')) return;
+            if (!confirm('Esto borra tu perfil, todas tus comidas y tus registros de peso y medidas. Tu cuenta sigue existiendo y podés volver a empezar. ¿Seguimos?')) return;
             try {
               await wipeData();
             } catch (err) {
@@ -181,6 +181,13 @@ function BodySection({ profile, onSave }: { profile: Profile; onSave: (p: Profil
         </label>
       </div>
       {!valid && <p className="form-error">Revisá los números: edad entre 14 y 110, altura entre 120 y 230 cm, peso entre 30 y 300 kg.</p>}
+      <p className="hint">
+        ¿Te pesaste? Anotalo en{' '}
+        <Link className="link" to="/progreso">
+          Tu progreso
+        </Link>{' '}
+        y se actualiza solo acá.
+      </p>
 
       {estimate && (
         <div className="energy-card">
