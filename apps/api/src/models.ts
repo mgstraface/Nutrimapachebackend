@@ -145,11 +145,39 @@ export function toFood(d: any) {
   };
 }
 
-/** La primera vez carga el catálogo inicial; después no lo toca (lo maneja el admin). */
-export async function seedFoods(defaults: { name: string }[]): Promise<void> {
-  if ((await FoodItem.estimatedDocumentCount()) > 0) return;
-  await FoodItem.insertMany(defaults, { ordered: false }).catch(() => undefined);
-  console.log(`[foods] catálogo inicial cargado (${defaults.length} alimentos)`);
+/* Lotes del catálogo que ya se cargaron (para no volver a cargar uno ni revivir lo que el admin borró). */
+const seedMarkSchema = new Schema({ key: { type: String, required: true, unique: true } }, { timestamps: true });
+const SeedMark = mongoose.model('SeedMark', seedMarkSchema);
+
+/** minúsculas y sin tildes, para comparar nombres */
+const fold = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+type SeedFood = { name: string; aliases?: string[] };
+
+/**
+ * Carga cada lote del catálogo una sola vez. En una base vacía entra todo; en una que ya tiene
+ * alimentos, un lote nuevo suma solo los que no existen (ni por nombre ni por alias), así no pisa
+ * lo que el admin editó. El lote 'inicial' de una base que ya existía solo se marca: ya estaba cargado.
+ */
+export async function seedFoods(batches: { key: string; foods: SeedFood[] }[]): Promise<void> {
+  const wasEmpty = (await FoodItem.estimatedDocumentCount()) === 0;
+  for (const batch of batches) {
+    if (await SeedMark.exists({ key: batch.key })) continue;
+    if (wasEmpty || batch.key !== 'inicial') {
+      const existing = await FoodItem.find({}, { name: 1, aliases: 1 }).lean();
+      const taken = new Set(existing.flatMap((f) => [f.name, ...(f.aliases ?? [])].map(fold)));
+      const fresh = batch.foods.filter((f) => !taken.has(fold(f.name)));
+      if (fresh.length) await FoodItem.insertMany(fresh, { ordered: false }).catch(() => undefined);
+      console.log(`[foods] lote "${batch.key}": ${fresh.length} alimentos nuevos (de ${batch.foods.length})`);
+    }
+    await SeedMark.create({ key: batch.key }).catch(() => undefined);
+  }
 }
 
 /* Recetas favoritas (guardadas desde ideas o desde "¿Qué hay en casa?"). */
