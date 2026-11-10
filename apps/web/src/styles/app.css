@@ -1446,6 +1446,24 @@ textarea {
   background: var(--dusk);
   transition: width 0.5s ease;
 }
+.meter-fill.is-adelante {
+  background: var(--lamp);
+}
+.meter-mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+.review-day-title {
+  margin: 0;
+  font-size: var(--step--1);
+  font-weight: 700;
+  color: var(--ink-2);
+}
 .meter-dot {
   position: absolute;
   top: 50%;

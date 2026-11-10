@@ -9,6 +9,9 @@ import {
   inspirationRequestSchema,
   loginSchema,
   mealTarget,
+  mealFeedback,
+  remainingTarget,
+  type DayMeal,
   mealTipsRequestSchema,
   noteInputSchema,
   pantryRequestSchema,
@@ -41,6 +44,12 @@ import { AnalysisError, analyzePhoto, analyzeText, generateIdeas, generateMealTi
 import { dbReady } from './config/db';
 import { env } from './config/env';
 import { AiUsage, Day, FoodItem, Meal, Note, Profile, SavedRecipe, SpecialDate, User, toDay, toFood, toMeal, toNote, toRecipe, toSessionUser, toSpecial } from './models';
+
+/** Comidas anotadas de una fecha, en la forma mínima que usa el análisis del día. */
+async function mealsOfDay(userId: string, date: string, skipId?: unknown): Promise<DayMeal[]> {
+  const docs = await Meal.find({ userId, date, ...(skipId ? { _id: { $ne: skipId } } : {}) }).lean();
+  return docs.map((m) => ({ slotKey: m.slotKey as string, time: (m.time as string | undefined) ?? undefined, items: (m.items ?? []) as never }));
+}
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
@@ -315,7 +324,9 @@ export function apiRouter(): Router {
       const slot = profile.mealSlots.find((s) => s.key === slotKey);
       const slotLabel = slot?.label ?? 'Comida';
       const energy = estimateEnergy(profile);
-      const target = energy ? mealTarget(profile, slotKey, energy) : null;
+      // El rango se ajusta a lo que ya comió hoy: si el almuerzo fue liviano, la cena puede ser más completa.
+      const dayMeals = await mealsOfDay(req.user!.id, date);
+      const target = energy ? remainingTarget(profile, slotKey, energy, dayMeals) : null;
       const dayLog = await Day.findOne({ userId: req.user!.id, date }).lean();
       const trainedToday =
         dayLog?.status === 'como-plan' || dayLog?.status === 'distinto' || (!dayLog?.status && !!plannedFor(profile, new Date()));
@@ -437,13 +448,25 @@ export function apiRouter(): Router {
       }
       const energy = estimateEnergy(profile);
       const slot = profile.mealSlots.find((s) => s.key === meal.slotKey);
+      // Las ideas también miran el día: una merienda cargada después de un almuerzo liviano no es algo a corregir.
+      const others = await mealsOfDay(req.user!.id, meal.date as string, meal._id);
+      const items = (meal.items ?? []) as never;
+      const fb = mealFeedback(profile, meal.slotKey as string, items, true, others, (meal.time as string | undefined) ?? undefined);
+      const label = (key: string) => profile.mealSlots.find((s) => s.key === key)?.label ?? 'Otra cosa';
       const out = await withAi(req, res, 'mejora', () =>
         generateMealTips({
           slotLabel: slot?.label ?? 'Comida',
           goalLabel: GOAL_LABELS[profile.goal],
           description: (meal.description as string | undefined) ?? '',
-          items: (meal.items ?? []) as never,
+          items,
           target: energy && slot ? mealTarget(profile, slot.key, energy) : null,
+          day: fb.day
+            ? {
+                ...fb.day,
+                verdict: fb.level,
+                meals: others.map((o) => `${label(o.slotKey)}: ${o.items.map((i) => `${i.name}${i.quantity ? ` ${i.quantity} ${i.unit ?? 'g'}` : ''}`).join(', ') || 'sin detalle'}`),
+              }
+            : null,
         }),
       );
       if (out) res.json({ tips: out.tips });
@@ -465,7 +488,7 @@ export function apiRouter(): Router {
       }
       const slot = body.slotKey ? profile.mealSlots.find((s) => s.key === body.slotKey) : undefined;
       const energy = estimateEnergy(profile);
-      const target = energy && slot ? mealTarget(profile, slot.key, energy) : null;
+      const target = energy && slot ? remainingTarget(profile, slot.key, energy, await mealsOfDay(req.user!.id, todayAR())) : null;
       const out = await withAi(req, res, 'recetas', () =>
         generatePantryRecipes({
           ingredients: body.ingredients,

@@ -331,6 +331,7 @@ Reglas:
 - Tono cálido y breve, en español rioplatense, una oración cada idea. Empezá con un verbo ("Probá…", "Sumale…", "La próxima…").
 - Nada de culpa ni de dieta: no uses "mal", "exceso", "te pasaste", "prohibido", "compensar", "light", "quemar". No sugieras saltear comidas ni ayunos.
 - Si la comida ya está equilibrada, una de las ideas puede ser solo para variar o hacerla más rica.
+- Mirá el día entero, no solo esta comida: si vino más cargada que lo típico pero el día viene equilibrado o liviano, no lo trates como algo a corregir (no sugieras achicarla); en ese caso las ideas son para sumar nutrientes o variar. Si el día viene liviano, nunca sugieras comer menos.
 Respondé solo usando la herramienta dar_ideas.`;
 
 const TIPS_TOOL = {
@@ -351,6 +352,8 @@ export async function generateMealTips(ctx: {
   description: string;
   items: MealItem[];
   target: { kcal: Range; protein: Range } | null;
+  /** Cómo viene el día (lo comido antes, lo esperable a esta altura) y qué concluyó la miradita */
+  day: { soFar: Range; expected: Range; day: Range; balance: string; verdict: string; meals: string[] } | null;
 }): Promise<{ tips: string[]; usage: Usage }> {
   const total = sumRanges(ctx.items.map((i) => i.kcal));
   const prot = sumRanges(ctx.items.map((i) => i.protein));
@@ -362,6 +365,12 @@ export async function generateMealTips(ctx: {
       : '',
     total ? `Estimado: ${total.min}–${total.max} kcal${prot ? `, ${prot.min}–${prot.max} g de proteína` : ''}.` : '',
     ctx.target ? `Rango orientativo para esta comida: ${ctx.target.kcal.min}–${ctx.target.kcal.max} kcal y ${ctx.target.protein.min}–${ctx.target.protein.max} g de proteína.` : '',
+    ctx.day?.meals.length ? `Otras comidas del mismo día: ${ctx.day.meals.join(' · ')}.` : '',
+    ctx.day
+      ? `En el día, contando esta comida, lleva ${ctx.day.soFar.min}–${ctx.day.soFar.max} kcal; a esta altura lo esperable es ${ctx.day.expected.min}–${ctx.day.expected.max} y el rango del día es ${ctx.day.day.min}–${ctx.day.day.max}. ${
+          ctx.day.balance === 'adelante' ? 'El día viene más cargado de lo esperable.' : ctx.day.balance === 'atras' ? 'El día viene más liviano de lo esperable.' : 'El día viene equilibrado.'
+        }`
+      : '',
   ].filter(Boolean);
   const { input, usage } = await callClaude({ system: TIPS_SYSTEM, tool: TIPS_TOOL, maxTokens: 400, content: [{ type: 'text', text: lines.join('\n') }] });
   const tips = (Array.isArray(input.ideas) ? input.ideas : [])

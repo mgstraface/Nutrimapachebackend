@@ -266,7 +266,9 @@ export function MealSheet({ target, onClose }: Props) {
         onClose();
         return;
       }
-      setReview({ meal, fb: mealFeedback(profile, slotKey, cleanItems, profile.view.showCalories) });
+      // Antes de opinar se mira el día entero: las demás comidas de esa fecha (sin esta).
+      const others = useStore.getState().meals.filter((x) => x.date === meal.date && x.id !== meal.id);
+      setReview({ meal, fb: mealFeedback(profile, slotKey, cleanItems, profile.view.showCalories, others, meal.time) });
       setBusy(false);
     } catch (err) {
       setError(errorText(err));
@@ -537,6 +539,32 @@ export function MealSheet({ target, onClose }: Props) {
   );
 }
 
+/** Cómo viene el día con esta comida: franja = rango del día, rayita = lo esperable a esta altura, relleno = lo que lleva. */
+function DayMeter({ day, showNumbers }: { day: NonNullable<MealFeedback['day']>; showNumbers: boolean }) {
+  const scaleMax = day.day.max * 1.3;
+  const pct = (n: number) => `${Math.min(100, Math.max(0, (n / scaleMax) * 100))}%`;
+  const mid = (day.soFar.min + day.soFar.max) / 2;
+  const expected = (day.expected.min + day.expected.max) / 2;
+  return (
+    <div className="review-meter review-day" aria-hidden={!showNumbers}>
+      <p className="review-day-title">Tu día hasta acá</p>
+      <div className="meter-track">
+        <span className="meter-band" style={{ left: pct(day.day.min), width: `calc(${pct(day.day.max)} - ${pct(day.day.min)})` }} />
+        <span className={`meter-fill is-${day.balance}`} style={{ width: pct(mid) }} />
+        <span className="meter-mark" style={{ left: pct(expected) }} />
+      </div>
+      {showNumbers ? (
+        <p className="hint">
+          Llevás {formatRange(day.soFar)} kcal · a esta altura lo esperable es {formatRange(day.expected)} · en el día: {formatRange(day.day)}
+          {day.assumed > 0 ? ` (las comidas sin anotar las conté como típicas)` : ''}
+        </p>
+      ) : (
+        <p className="hint">La rayita es lo esperable a esta altura del día; la barra, lo que llevás.</p>
+      )}
+    </div>
+  );
+}
+
 const REVIEW_FACE = { dentro: 'alegria', generosa: 'acompañamiento', liviana: 'curiosidad', 'sin-datos': 'alegria' } as const;
 
 /** La miradita: frase suave, barrita del rango sugerido y, si quiere, ideas para mejorarla. */
@@ -561,8 +589,11 @@ export function MealReview(props: {
         <p className="review-headline">{fb.headline}</p>
       </div>
 
+      {fb.day && <DayMeter day={fb.day} showNumbers={props.showNumbers} />}
+
       {kcal && target && (
         <div className="review-meter" aria-hidden={!props.showNumbers}>
+          {fb.day && <p className="review-day-title">Esta comida</p>}
           <div className="meter-track">
             <span className="meter-band" style={{ left: pct(target.kcal.min), width: `calc(${pct(target.kcal.max)} - ${pct(target.kcal.min)})` }} />
             <span className={`meter-dot is-${fb.level}`} style={{ left: pct(mid) }} />
