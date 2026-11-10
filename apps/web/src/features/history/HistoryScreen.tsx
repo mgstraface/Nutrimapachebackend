@@ -76,8 +76,8 @@ function WeeksOverview({ profile, meals, today }: { profile: Profile; meals: Mea
   const weeks = [0, 1, 2, 3]
     .map((back) => {
       const start = addDays(current, -7 * back);
-      // Semanas pasadas: se miran desde el lunes siguiente, así cuentan los 7 días como terminados.
-      const w = weekSummary(profile, meals, back === 0 ? today : addDays(start, 7), show);
+      // Semanas pasadas: se miran desde hoy, así sus 7 días cuentan como terminados.
+      const w = weekSummary(profile, meals, today, show, start);
       return w && w.loggedDays + (back === 0 && w.days.some((d) => d.kind === 'hoy' && d.kcal) ? 1 : 0) >= 2 ? { start, back, w } : null;
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);

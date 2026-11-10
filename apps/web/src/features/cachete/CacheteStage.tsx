@@ -6,6 +6,9 @@ import {
   newUnlocks,
   specialPhrase,
   usageStats,
+  addDays,
+  weekStart,
+  weekSummary,
   type DayLog,
   type Expression,
   type MascotEvent,
@@ -14,10 +17,12 @@ import {
 } from '@nutrimapache/shared';
 import { Cachete, zoneAt, type CacheteAction, type CacheteLook } from '../../mascot/Cachete';
 import { useCacheteGestures, type Gesture } from '../../mascot/useCacheteGestures';
+import { useShake } from '../../mascot/useShake';
 import { errorText } from '../../lib/api';
 import { play, type SoundKind } from '../../lib/sound';
 import { useStore } from '../../lib/store';
 import { BreathSheet } from './BreathSheet';
+import { GesturesSheet } from './GesturesSheet';
 import { LookSheet } from './LookSheet';
 import { MoodSheet } from './MoodSheet';
 import { NoteModal } from './NoteModal';
@@ -31,9 +36,26 @@ interface Props {
   now: Date;
 }
 
-const ACTION_MS: Partial<Record<CacheteAction, number>> = { dormida: 9000, baile: 3200, abrazo: 2800, mareo: 3200 };
+const ACTION_MS: Partial<Record<CacheteAction, number>> = {
+  dormida: 9000,
+  baile: 3200,
+  abrazo: 2800,
+  mareo: 3200,
+  sacudida: 3400,
+  risa: 3600,
+  rascar: 2400,
+  cachetes: 1900,
+  nam: 2600,
+  sorbo: 2700,
+  bostezo: 2300,
+  estira: 1900,
+  mira: 2500,
+  juega: 1300,
+  festejo: 4300,
+};
 
-const ACTION_EVENT: Record<CacheteAction, MascotEvent> = {
+/** Las reacciones y la vida propia no cambian la frase: solo se mueve. */
+const ACTION_EVENT: Partial<Record<CacheteAction, MascotEvent>> = {
   mimo: 'mimo',
   cosquillas: 'cosquillas',
   'choca-izq': 'choca',
@@ -44,9 +66,15 @@ const ACTION_EVENT: Record<CacheteAction, MascotEvent> = {
   baile: 'baile',
   mareo: 'mareo',
   dormida: 'dormida',
+  cachetes: 'cachetes',
+  rascar: 'rascar',
+  risa: 'risa',
+  sacudida: 'sacudida',
+  festejo: 'festejo',
 };
 
-const ACTION_SOUND: Record<CacheteAction, SoundKind> = {
+/** Los movimientos sueltos (bostezo, mirar…) van en silencio para no molestar. */
+const ACTION_SOUND: Partial<Record<CacheteAction, SoundKind>> = {
   mimo: 'mimo',
   cosquillas: 'risita',
   'choca-izq': 'choca',
@@ -57,6 +85,24 @@ const ACTION_SOUND: Record<CacheteAction, SoundKind> = {
   baile: 'baile',
   mareo: 'mareo',
   dormida: 'bostezo',
+  cachetes: 'pop',
+  rascar: 'rasca',
+  risa: 'risa',
+  sacudida: 'mareo',
+  festejo: 'festejo',
+  nam: 'nam',
+};
+
+/** Cosas que hace sola cuando nadie la toca. */
+const IDLE: CacheteAction[] = ['mira', 'estira', 'juega', 'bostezo', 'mira'];
+const idleDelay = () => 14000 + Math.random() * 14000;
+const TICKLE_WINDOW_MS = 4000;
+const reducedMotion = () => {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
 };
 
 const lsGet = (k: string) => {
@@ -84,6 +130,7 @@ export function CacheteStage({ base, baseIsEvent, today, day, now }: Props) {
   const saveDay = useStore((s) => s.saveDay);
   const saveProfile = useStore((s) => s.saveProfile);
   const openNote = useStore((s) => s.openNote);
+  const lastEvent = useStore((s) => s.lastEvent);
 
   const [action, setAction] = useState<CacheteAction | null>(null);
   const actionTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -96,6 +143,11 @@ export function CacheteStage({ base, baseIsEvent, today, day, now }: Props) {
   const [newLook, setNewLook] = useState(() => lsGet('cn_look_new') === '1');
   const [arropada, setArropada] = useState(() => lsGet(`cn_arropada_${today}`) === '1');
   const [confetti, setConfetti] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const actionRef = useRef<CacheteAction | null>(null);
+  const lastTouch = useRef(Date.now());
+  const nextIdle = useRef(idleDelay());
+  const tickles = useRef<number[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const hour = now.getHours();
@@ -144,15 +196,71 @@ export function CacheteStage({ base, baseIsEvent, today, day, now }: Props) {
     neck: profile.look.neck ?? (month >= 6 && month <= 8 ? 'bufanda' : null),
   };
   const showBlanket = arropada && night && !action;
+  // Arropada de noche no hace cositas sola: la dejamos dormir
+  const restingRef = useRef(false);
+  restingRef.current = arropada && night;
 
-  const doAction = (a: CacheteAction) => {
+  /** idle = la hace sola (no cuenta como interacción ni suena). */
+  const doAction = (a: CacheteAction, idle = false) => {
     clearTimeout(actionTimer.current);
     setAction(a);
-    setOverride(null);
-    emit(ACTION_EVENT[a]);
-    play(ACTION_SOUND[a]);
-    actionTimer.current = setTimeout(() => setAction(null), ACTION_MS[a] ?? 2600);
+    actionRef.current = a;
+    const event = ACTION_EVENT[a];
+    if (event) {
+      setOverride(null);
+      emit(event);
+    }
+    const sound = ACTION_SOUND[a];
+    if (sound && !idle) play(sound);
+    if (!idle) {
+      lastTouch.current = Date.now();
+      nextIdle.current = idleDelay();
+    }
+    actionTimer.current = setTimeout(() => {
+      setAction(null);
+      actionRef.current = null;
+    }, ACTION_MS[a] ?? 2600);
   };
+
+  // Sacudir el celu → se marea
+  const shake = useShake(() => doAction('sacudida'));
+
+  // Reacciona a lo que se anota: igual para cualquier comida (nunca se juzga qué se comió)
+  useEffect(() => {
+    if (!lastEvent || Date.now() - lastEvent.at > 3000) return;
+    if (lastEvent.event === 'comida-registrada') doAction('nam', true);
+    else if (lastEvent.event === 'agua-registrada') doAction('sorbo', true);
+  }, [lastEvent?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Vida propia: si nadie la toca un rato, hace sus cositas
+  useEffect(() => {
+    if (reducedMotion()) return;
+    const t = setInterval(() => {
+      if (actionRef.current || restingRef.current || document.visibilityState !== 'visible') return;
+      if (Date.now() - lastTouch.current < nextIdle.current) return;
+      const h = new Date().getHours();
+      const sleepy = h >= 21 || h < 7 || (h >= 14 && h < 16);
+      const pool = sleepy ? [...IDLE, 'bostezo', 'bostezo'] : IDLE;
+      lastTouch.current = Date.now();
+      nextIdle.current = idleDelay();
+      doAction(pool[Math.floor(Math.random() * pool.length)] as CacheteAction, true);
+    }, 3000);
+    return () => clearInterval(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Festejo: la primera vez que se abre en la semana, si la anterior cerró pareja
+  useEffect(() => {
+    const lastMonday = addDays(weekStart(today), -7);
+    const key = `cn_festejo_${lastMonday}`;
+    if (lsGet(key)) return;
+    const w = weekSummary(profile, meals, today, false, lastMonday);
+    if (!w || w.loggedDays < 4) return;
+    lsSet(key, '1');
+    if (w.level === 'en-linea' || (w.level === 'margen' && !w.care)) {
+      const t = setTimeout(() => doAction('festejo'), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [today]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deliverNote = async () => {
     if (!pendingNote) return;
@@ -173,16 +281,28 @@ export function CacheteStage({ base, baseIsEvent, today, day, now }: Props) {
     if (g.kind === 'double') return doAction('baile');
     if (g.kind === 'hold') return doAction('abrazo');
     if (g.kind === 'rock') return doAction(night ? 'dormida' : 'mareo');
+    if (g.kind === 'rub') return doAction('rascar');
     const zone = zoneAt(g.x, g.y, base.expression, action);
     if (!zone) return;
     if (showBlanket) {
       // Arropada: al tocarla se despierta un poquito
       setArropada(false);
     }
+    if (zone === 'panza') {
+      // Muchas cosquillas seguidas → ataque de risa
+      const now = Date.now();
+      tickles.current = [...tickles.current.filter((t) => now - t < TICKLE_WINDOW_MS), now];
+      if (tickles.current.length >= 3) {
+        tickles.current = [];
+        return doAction('risa');
+      }
+    }
     doAction(
       zone === 'cabeza'
         ? 'mimo'
-        : zone === 'panza'
+        : zone === 'cachetes'
+          ? 'cachetes'
+          : zone === 'panza'
           ? 'cosquillas'
           : zone === 'mano-izq'
             ? 'choca-izq'
@@ -259,10 +379,15 @@ export function CacheteStage({ base, baseIsEvent, today, day, now }: Props) {
           aria-label={pendingNote ? `${profile.mascotName} tiene una notita para vos. Tocala para abrirla.` : `${profile.mascotName}. Tocala, abrazala o mecela.`}
           onKeyDown={onKey}
           {...gestures.handlers}
+          onPointerDown={(e) => {
+            lastTouch.current = Date.now();
+            shake.resumeOnTouch();
+            gestures.handlers.onPointerDown(e);
+          }}
         >
           <Cachete
             expression={expression}
-            size={176}
+            size={216}
             action={action}
             look={look}
             lookAt={gestures.lookAt}
@@ -271,6 +396,9 @@ export function CacheteStage({ base, baseIsEvent, today, day, now }: Props) {
             confetti={confetti}
           />
         </div>
+        <button type="button" className="den-help" aria-label={`¿Qué le puedo hacer a ${profile.mascotName}?`} onClick={() => setHelpOpen(true)}>
+          ?
+        </button>
       </div>
 
       <div className="den-tools">
@@ -310,6 +438,17 @@ export function CacheteStage({ base, baseIsEvent, today, day, now }: Props) {
       {error && <p className="form-error den-error">{error}</p>}
 
       <LookSheet open={lookOpen} onClose={() => setLookOpen(false)} />
+      <GesturesSheet
+        open={helpOpen}
+        name={profile.mascotName}
+        shake={shake.status}
+        onEnableShake={() => {
+          void shake.enable().then((ok) => {
+            if (ok) doAction('sacudida');
+          });
+        }}
+        onClose={() => setHelpOpen(false)}
+      />
       <MoodSheet open={moodOpen} current={day.mood} onPick={(m) => void pickMood(m)} onClose={() => setMoodOpen(false)} />
       <BreathSheet
         open={breathOpen}

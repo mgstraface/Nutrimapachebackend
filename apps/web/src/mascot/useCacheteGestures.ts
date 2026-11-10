@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { onHead } from './Cachete';
 
 /**
  * Gestos sobre Cachete:
  * - toque → zona (cabeza, panza, mano, cinta…)
  * - doble toque → baile
  * - mantener apretado → abrazo
- * - deslizar de lado a lado → mecerla
+ * - deslizar de lado a lado sobre el cuerpo → mecerla
+ * - frotar el dedo sobre la cabeza → rascarla
  * - mover el dedo → los ojos lo siguen
  * Coordenadas convertidas al dibujo (viewBox 0 0 200 220).
  */
-export type Gesture = { kind: 'tap'; x: number; y: number } | { kind: 'double' } | { kind: 'hold' } | { kind: 'rock' };
+export type Gesture = { kind: 'tap'; x: number; y: number } | { kind: 'double' } | { kind: 'hold' } | { kind: 'rock' } | { kind: 'rub' };
 
 const HOLD_MS = 550;
 const DOUBLE_MS = 280;
+/** Mecer: cuántos cambios de dirección y en cuánto tiempo (antes era 3 en 1,6 s y costaba) */
+const ROCK_FLIPS = 3;
+const ROCK_WINDOW_MS = 2200;
+/** Rascar: cuánto recorrido del dedo sobre la cabeza (en unidades del dibujo) */
+const RUB_PATH = 130;
 
 export function useCacheteGestures(onGesture: (g: Gesture) => void) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -27,6 +34,10 @@ export function useCacheteGestures(onGesture: (g: Gesture) => void) {
     flipStart: 0,
     moved: false,
     fired: false,
+    onHead: false,
+    path: 0,
+    px: 0,
+    py: 0,
     holdTimer: 0 as number | ReturnType<typeof setTimeout>,
     tapTimer: 0 as number | ReturnType<typeof setTimeout>,
     lastTap: { t: 0, x: 0, y: 0 },
@@ -74,6 +85,11 @@ export function useCacheteGestures(onGesture: (g: Gesture) => void) {
     s.flipStart = Date.now();
     s.moved = false;
     s.fired = false;
+    const p = toSvg(e);
+    s.onHead = onHead(p.x, p.y);
+    s.path = 0;
+    s.px = p.x;
+    s.py = p.y;
     updateLook(e);
     clearTimeout(s.holdTimer);
     s.holdTimer = setTimeout(() => {
@@ -92,16 +108,27 @@ export function useCacheteGestures(onGesture: (g: Gesture) => void) {
       s.moved = true;
       clearTimeout(s.holdTimer);
     }
+    // Rascar: si arrancó sobre la cabeza, se mide cuánto se frota (en cualquier dirección)
+    const p = toSvg(e);
+    s.path += Math.hypot(p.x - s.px, p.y - s.py);
+    s.px = p.x;
+    s.py = p.y;
+    if (s.onHead && !s.fired && s.path > RUB_PATH) {
+      s.fired = true;
+      cb.current({ kind: 'rub' });
+      return;
+    }
+    if (s.onHead) return;
     const dx = e.clientX - s.lastX;
-    if (Math.abs(dx) > 6) {
+    if (Math.abs(dx) > 4) {
       const d = Math.sign(dx);
       if (s.dir && d !== s.dir) {
-        if (Date.now() - s.flipStart > 1600) {
+        if (Date.now() - s.flipStart > ROCK_WINDOW_MS) {
           s.flips = 0;
           s.flipStart = Date.now();
         }
         s.flips++;
-        if (s.flips >= 3 && !s.fired) {
+        if (s.flips >= ROCK_FLIPS && !s.fired) {
           s.fired = true;
           cb.current({ kind: 'rock' });
         }

@@ -27,7 +27,12 @@ export type MascotEvent =
   | 'dormida'
   | 'arropada'
   | 'notita-abierta'
-  | 'desbloqueo';
+  | 'desbloqueo'
+  | 'cachetes'
+  | 'rascar'
+  | 'risa'
+  | 'sacudida'
+  | 'festejo';
 
 export interface MascotContext {
   event: MascotEvent;
@@ -95,6 +100,16 @@ export function mascotState(ctx: MascotContext, seed = Date.now()): MascotState 
       return { expression: 'descanso', phrase: `Que descanses, ${n}. Mañana seguimos 🌙` };
     case 'notita-abierta':
       return { expression: 'alegria', phrase: pick(['¡Qué lindo mensaje! 💌', 'Te la guardo en tus notitas.'], seed) };
+    case 'cachetes':
+      return { expression: 'sorpresa', phrase: pick(['¡Mis cachetes! Por algo me llamo así 😳', '¡Ay! Me pongo coloradita…', 'Pellizquito de cachete, jiji ☺️'], seed) };
+    case 'rascar':
+      return { expression: 'descanso', phrase: pick(['Mmm, ahí, ahí… qué rico 😌', 'Me encanta que me rasques la cabecita.', 'Un ratito más… 💛'], seed) };
+    case 'risa':
+      return { expression: 'alegria', phrase: pick(['¡JAJAJA, basta, basta! 😂', '¡No puedo parar de reír! 🤣', '¡Me hacés llorar de risa!'], seed) };
+    case 'sacudida':
+      return { expression: 'sorpresa', phrase: pick(['¡Epa! ¡Me sacudiste toda! 😵‍💫', '¡Terremoto! Todo da vueltas…', 'Wooo… ¿dónde estoy? 🌀'], seed) };
+    case 'festejo':
+      return { expression: 'alegria', phrase: `¡La semana cerró pareja, ${n}! Lo festejamos 🎉` };
     case 'desbloqueo':
       return { expression: 'sorpresa', phrase: '¡Tengo algo nuevo para probarme! Tocá 👗' };
     case 'abrir-app':

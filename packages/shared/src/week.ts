@@ -97,11 +97,13 @@ export function completedDayKcal(
 /**
  * Cómo viene la semana de `today` (los días anteriores a `today` cuentan como terminados).
  * Sirve también para un día pasado: se mira su semana "como si fuera ese día".
+ * Para una semana anterior entera, pasar `weekOf` (cualquier fecha de esa semana) y hoy como `today`.
  */
-export function weekSummary(profile: Profile, meals: WeekMeal[], today: string, numbers = true): WeekSummary | null {
+export function weekSummary(profile: Profile, meals: WeekMeal[], today: string, numbers = true, weekOf = today): WeekSummary | null {
   const energy = estimateEnergy(profile);
   if (!energy) return null;
-  const start = weekStart(today);
+  // weekOf: la semana a mirar (por defecto la de hoy). Una semana anterior queda con todos sus días terminados.
+  const start = weekStart(weekOf);
   const byDate = new Map<string, WeekMeal[]>();
   for (const m of meals) if (m.date >= start && m.date <= addDays(start, 6)) (byDate.get(m.date) ?? byDate.set(m.date, []).get(m.date)!).push(m);
 

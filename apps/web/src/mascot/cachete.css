@@ -103,7 +103,8 @@
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
-  touch-action: pan-y;
+  /* Sobre la muñeca el dedo es solo para ella: si no, iOS toma el vaivén como scroll y corta el gesto de mecerla */
+  touch-action: none;
   cursor: pointer;
   border-radius: 50%;
 }
@@ -150,6 +151,97 @@
 .act-choca-der .cachete-body {
   transform-origin: 100px 208px;
   animation: cachete-hop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) 1;
+}
+
+/* ---------- gestos nuevos ---------- */
+.act-cachetes .cachete-body {
+  transform-origin: 100px 208px;
+  animation: cachete-squeeze 0.7s ease-in-out 2;
+}
+.cachete-cheeks.is-puffed ellipse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cheek-puff 0.6s ease-in-out 3;
+}
+.act-rascar .cachete-head {
+  animation: cachete-rub 1.1s ease-in-out 2;
+}
+.act-risa .cachete-body {
+  transform-origin: 100px 208px;
+  animation: cachete-wiggle 0.16s ease-in-out 18;
+}
+.act-risa .cachete-head {
+  animation: cachete-nod 0.5s ease-in-out 5;
+}
+.mouth-laugh {
+  transform-box: fill-box;
+  transform-origin: center top;
+  animation: mouth-laugh 0.25s ease-in-out infinite;
+}
+.fx-tears path {
+  transform-box: fill-box;
+  transform-origin: center top;
+  animation: tear-drop 0.9s ease-in infinite;
+}
+.act-sacudida .cachete-body {
+  transform-origin: 100px 208px;
+  animation: cachete-shake 0.18s ease-in-out 8, cachete-wobble 0.8s ease-in-out 1.44s 3;
+}
+
+/* ---------- reacciones ---------- */
+.act-sorbo .cachete-head {
+  animation: head-sip 1.3s ease-in-out 2;
+}
+.fx-cup {
+  transform-origin: 125px 90px;
+  animation: cachete-pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.fx-drop {
+  animation: fx-float 1.3s ease-out infinite;
+}
+.act-nam .cachete-head {
+  animation: head-chew 0.36s ease-in-out 7;
+}
+.mouth-chew {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mouth-chew 0.36s ease-in-out 7;
+}
+
+/* ---------- vida propia ---------- */
+.act-bostezo .cachete-head {
+  animation: head-yawn 2.2s ease-in-out 1;
+}
+.mouth-yawn {
+  transform-box: fill-box;
+  transform-origin: center top;
+  animation: mouth-yawn 2.2s ease-in-out 1 both;
+}
+.act-estira .cachete-body {
+  transform-origin: 100px 208px;
+  animation: body-stretch 1.8s ease-in-out 1;
+}
+.act-mira .cachete-head {
+  animation: head-look 2.4s ease-in-out 1;
+}
+.eyes-look {
+  animation: eyes-look 2.4s ease-in-out 1;
+}
+.act-juega .cachete-body {
+  transform-origin: 100px 18px;
+  animation: cachete-swing 1.2s ease-in-out 1;
+}
+
+/* ---------- festejo ---------- */
+.act-festejo .cachete-body {
+  transform-origin: 100px 208px;
+  animation: cachete-dance 0.5s ease-in-out 8;
+}
+.act-festejo .arm-izq .cachete-arm-inner {
+  animation: cachete-arm-dance 0.5s ease-in-out 8;
+}
+.act-festejo .arm-der .cachete-arm-inner {
+  animation: cachete-arm-dance 0.5s ease-in-out 0.25s 8;
 }
 
 .fx-hearts path {
@@ -219,6 +311,63 @@
   25% { transform: rotate(-7deg) translateX(-4px); }
   75% { transform: rotate(7deg) translateX(4px); }
 }
+@keyframes cheek-puff {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+@keyframes cachete-rub {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg) translateY(1px); }
+  75% { transform: rotate(8deg) translateY(1px); }
+}
+@keyframes mouth-laugh {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.7); }
+}
+@keyframes tear-drop {
+  0% { transform: translateY(0) scale(0.7); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateY(9px) scale(1); opacity: 0; }
+}
+@keyframes cachete-shake {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  25% { transform: translateX(-7px) rotate(-4deg); }
+  75% { transform: translateX(7px) rotate(4deg); }
+}
+@keyframes head-sip {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(8deg) translateY(-2px); }
+}
+@keyframes head-chew {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(1.5px); }
+}
+@keyframes mouth-chew {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(0.75, 0.35); }
+}
+@keyframes head-yawn {
+  0%, 100% { transform: rotate(0deg); }
+  40%, 70% { transform: rotate(-6deg) translateY(-2px); }
+}
+@keyframes mouth-yawn {
+  0%, 100% { transform: scaleY(0.3); }
+  40%, 70% { transform: scaleY(1.3); }
+}
+@keyframes body-stretch {
+  0%, 100% { transform: scaleY(1); }
+  45%, 65% { transform: scale(0.97, 1.07); }
+}
+@keyframes head-look {
+  0%, 100% { transform: rotate(0deg); }
+  25%, 40% { transform: rotate(-7deg); }
+  60%, 80% { transform: rotate(7deg); }
+}
+@keyframes eyes-look {
+  0%, 100% { transform: translateX(0); }
+  25%, 40% { transform: translateX(-3px); }
+  60%, 80% { transform: translateX(3px); }
+}
 @keyframes cachete-spin {
   to { transform: rotate(360deg); }
 }
@@ -239,7 +388,15 @@
 @media (prefers-reduced-motion: reduce) {
   .acc-confetti,
   .fx-orbit,
-  .eyes-spin path {
+  .eyes-spin path,
+  .fx-tears path,
+  .mouth-laugh,
+  .mouth-chew,
+  .mouth-yawn,
+  .eyes-look,
+  .cachete-cheeks.is-puffed ellipse,
+  [class*='act-'] .cachete-body,
+  [class*='act-'] .cachete-head {
     animation: none !important;
   }
 

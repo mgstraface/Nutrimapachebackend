@@ -46,7 +46,22 @@ export type CacheteAction =
   | 'abrazo'
   | 'baile'
   | 'mareo'
-  | 'dormida';
+  | 'dormida'
+  // gestos nuevos
+  | 'cachetes'
+  | 'rascar'
+  | 'risa'
+  | 'sacudida'
+  // reacciones a lo que se anota (iguales para cualquier comida: nunca se juzga qué se comió)
+  | 'sorbo'
+  | 'nam'
+  // vida propia cuando nadie la toca
+  | 'bostezo'
+  | 'estira'
+  | 'mira'
+  | 'juega'
+  // la semana cerró pareja
+  | 'festejo';
 
 /** Lo que tiene puesto. Las claves vienen del catálogo de accesorios (o 'noche'/'fiesta' automáticos). */
 export interface CacheteLook {
@@ -76,6 +91,17 @@ const ACTION_EXPRESSION: Record<CacheteAction, Expression> = {
   baile: 'alegria',
   mareo: 'sorpresa',
   dormida: 'descanso',
+  cachetes: 'sorpresa',
+  rascar: 'descanso',
+  risa: 'alegria',
+  sacudida: 'sorpresa',
+  sorbo: 'curiosidad',
+  nam: 'alegria',
+  bostezo: 'descanso',
+  estira: 'sorpresa',
+  mira: 'curiosidad',
+  juega: 'curiosidad',
+  festejo: 'alegria',
 };
 
 const ACTION_ARMS: Partial<Record<CacheteAction, [number, number]>> = {
@@ -88,13 +114,29 @@ const ACTION_ARMS: Partial<Record<CacheteAction, [number, number]>> = {
   baile: [150, 150],
   mareo: [100, 100],
   dormida: [-42, -42],
+  cachetes: [128, 128],
+  rascar: [12, 12],
+  risa: [-36, -36],
+  sacudida: [112, 112],
+  sorbo: [15, 118],
+  nam: [-22, -22],
+  bostezo: [160, 15],
+  estira: [170, 170],
+  mira: [8, 8],
+  juega: [10, 150],
+  festejo: [158, 158],
 };
 
 export function armsFor(e: Expression, action?: CacheteAction | null): [number, number] {
   return (action && ACTION_ARMS[action]) || ARMS[action ? ACTION_EXPRESSION[action] : e];
 }
 
-export type CacheteZone = 'cinta' | 'cabeza' | 'mano-izq' | 'mano-der' | 'panza' | 'cuerpo';
+export type CacheteZone = 'cinta' | 'cabeza' | 'cachetes' | 'mano-izq' | 'mano-der' | 'panza' | 'cuerpo';
+
+/** ¿Está sobre la cabeza? (para rascarla) */
+export function onHead(x: number, y: number): boolean {
+  return Math.hypot(x - 100, y - 72) <= 34;
+}
 
 /** Qué parte se tocó, en coordenadas del dibujo (viewBox 0 0 200 220). */
 export function zoneAt(x: number, y: number, e: Expression, action?: CacheteAction | null): CacheteZone | null {
@@ -111,6 +153,8 @@ export function zoneAt(x: number, y: number, e: Expression, action?: CacheteActi
     if (Math.hypot(x - hx, y - hy) < 15) return side === -1 ? 'mano-izq' : 'mano-der';
   }
   if (y < 46 && Math.abs(x - 100) < 22) return 'cinta';
+  // Los cachetes: un poco más grandes que el rubor, para que sea fácil acertarles con el dedo
+  if (Math.hypot(x - 82, y - 79) < 10 || Math.hypot(x - 118, y - 79) < 10) return 'cachetes';
   if (Math.hypot(x - 100, y - 72) <= 33) return 'cabeza';
   if (x >= BX - 4 && x <= BX + BW + 4 && y >= 112 && y <= BY + BH) return 'panza';
   if (x >= 40 && x <= 160 && y >= 10 && y <= 215) return 'cuerpo';
@@ -269,7 +313,72 @@ function Face({ e, action, lookAt }: { e: Expression; action: CacheteAction | nu
   let mouth: JSX.Element;
   const following = !!lookAt && !action && e !== 'descanso';
 
-  if (action === 'mareo') {
+  if (action === 'cachetes') {
+    // Ojitos apretados ><, cachetes inflados
+    eyes = (
+      <g fill="none" stroke={ink} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M85 65 L92 68.5 L85 72" />
+        <path d="M115 65 L108 68.5 L115 72" />
+      </g>
+    );
+    mouth = <circle cx="100" cy="84" r="2.6" fill={C.mouth} />;
+  } else if (action === 'rascar' || action === 'sorbo' || action === 'estira') {
+    // Ojitos cerrados de gusto
+    eyes = (
+      <g fill="none" stroke={ink} strokeWidth="2.4" strokeLinecap="round">
+        <path d="M84 69 Q89 73 94 69" />
+        <path d="M106 69 Q111 73 116 69" />
+      </g>
+    );
+    mouth =
+      action === 'rascar' ? (
+        <path d="M94 81 Q100 87 106 81" fill="none" stroke={C.mouth} strokeWidth="2.4" strokeLinecap="round" />
+      ) : action === 'sorbo' ? (
+        <circle cx="100" cy="84" r="2.2" fill={C.mouth} />
+      ) : (
+        <ellipse cx="100" cy="84" rx="3.2" ry="4" fill={C.mouth} />
+      );
+  } else if (action === 'bostezo') {
+    eyes = (
+      <g fill="none" stroke={ink} strokeWidth="2.4" strokeLinecap="round">
+        <path d="M84 69 Q89 72 94 69" />
+        <path d="M106 69 Q111 72 116 69" />
+      </g>
+    );
+    mouth = <ellipse className="mouth-yawn" cx="100" cy="85" rx="4.5" ry="6" fill={C.mouth} />;
+  } else if (action === 'risa') {
+    eyes = (
+      <g>
+        <g fill="none" stroke={ink} strokeWidth="2.6" strokeLinecap="round">
+          <path d="M84 70 Q89 63 94 70" />
+          <path d="M106 70 Q111 63 116 70" />
+        </g>
+        <g fill={C.turq} className="fx-tears">
+          <path d="M80 72 q-3 5 0 7 q3 -2 0 -7 z" />
+          <path d="M120 72 q-3 5 0 7 q3 -2 0 -7 z" />
+        </g>
+      </g>
+    );
+    mouth = <path className="mouth-laugh" d="M92 80 Q100 93 108 80 Z" fill={C.mouth} />;
+  } else if (action === 'nam') {
+    eyes = (
+      <g fill="none" stroke={ink} strokeWidth="2.6" strokeLinecap="round">
+        <path d="M84 70 Q89 64 94 70" />
+        <path d="M106 70 Q111 64 116 70" />
+      </g>
+    );
+    mouth = <ellipse className="mouth-chew" cx="100" cy="84" rx="4.5" ry="3" fill={C.mouth} />;
+  } else if (action === 'mira') {
+    eyes = (
+      <g className="eyes-look">
+        <circle cx="89" cy="68" r="3.8" fill={ink} />
+        <circle cx="111" cy="68" r="3.8" fill={ink} />
+        <circle cx="90.2" cy="66.7" r="1.2" fill="#fff" />
+        <circle cx="112.2" cy="66.7" r="1.2" fill="#fff" />
+      </g>
+    );
+    mouth = <circle cx="100" cy="83" r="2.2" fill={C.mouth} />;
+  } else if (action === 'mareo' || action === 'sacudida') {
     eyes = (
       <g fill="none" stroke={ink} strokeWidth="1.8" strokeLinecap="round" className="eyes-spin">
         <path d="M89 68 m0 0 a1.5 1.5 0 1 1 1.5 1.5 a3 3 0 1 1 -3 -3 a4.5 4.5 0 1 1 4.5 4.5" />
@@ -344,15 +453,17 @@ function Face({ e, action, lookAt }: { e: Expression; action: CacheteAction | nu
         mouth = <path d="M95 81 Q100 86 105 81" fill="none" stroke={C.mouth} strokeWidth="2.4" strokeLinecap="round" />;
     }
   }
-  const warm = e === 'alegria' || e === 'acompañamiento' || action === 'abrazo' || action === 'mimo';
+  const warm =
+    e === 'alegria' || e === 'acompañamiento' || action === 'abrazo' || action === 'mimo' || action === 'rascar' || action === 'cachetes';
+  const puffed = action === 'cachetes';
   return (
     <g>
       {eyes}
       <path d="M100 72 v5" stroke={ink} strokeWidth="1.8" strokeLinecap="round" />
       {mouth}
-      <g fill={C.cheek} opacity={warm ? 0.85 : 0.45} className="cachete-cheeks">
-        <ellipse cx="82" cy="79" rx="5.5" ry="3.6" />
-        <ellipse cx="118" cy="79" rx="5.5" ry="3.6" />
+      <g fill={C.cheek} opacity={puffed ? 1 : warm ? 0.85 : 0.45} className={`cachete-cheeks${puffed ? ' is-puffed' : ''}`}>
+        <ellipse cx="82" cy="79" rx={puffed ? 8 : 5.5} ry={puffed ? 6 : 3.6} />
+        <ellipse cx="118" cy="79" rx={puffed ? 8 : 5.5} ry={puffed ? 6 : 3.6} />
       </g>
     </g>
   );
@@ -558,7 +669,75 @@ function ActionEffect({ action }: { action: CacheteAction }) {
       </g>
     );
   }
-  if (action === 'mareo') {
+  if (action === 'risa') {
+    return (
+      <g className="fx-notes" fill={C.yellow} fontFamily="var(--font-display)" fontSize="15" fontWeight="800">
+        <text x="30" y="52">ja</text>
+        <text x="148" y="40">ja!</text>
+      </g>
+    );
+  }
+  if (action === 'cachetes') {
+    return (
+      <g className="fx-hearts" fill={C.cheek}>
+        {[
+          [66, 66, 0],
+          [134, 62, 0.2],
+        ].map(([x, y, d]) => (
+          <path key={x} d={`M${x} ${y} l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 l5 -2 z`} style={{ animationDelay: `${d}s` }} />
+        ))}
+      </g>
+    );
+  }
+  if (action === 'rascar') {
+    return (
+      <g className="fx-hearts" fill={C.lilac}>
+        {[
+          [70, 34, 0],
+          [130, 30, 0.4],
+        ].map(([x, y, d]) => (
+          <path key={x} d={`M${x} ${y} c-3 -4.5 -9 -0.8 -4.5 4.5 l4.5 4.5 l4.5 -4.5 c4.5 -5.3 -1.5 -9 -4.5 -4.5 z`} style={{ animationDelay: `${d}s` }} />
+        ))}
+      </g>
+    );
+  }
+  if (action === 'sorbo') {
+    // Vasito de agua a la altura de la boca, en la mano derecha
+    return (
+      <g className="fx-cup">
+        <path d="M118 80 l14 0 l-2 18 l-10 0 z" fill="#fff" fillOpacity="0.85" stroke={C.turq2} strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M119.3 86 l11.4 0 l-1.3 11 l-8.8 0 z" fill={C.turq} />
+        <circle className="fx-drop" cx="125" cy="76" r="1.8" fill={C.turq} />
+      </g>
+    );
+  }
+  if (action === 'nam') {
+    return (
+      <g className="fx-notes" fill="#fff" fontFamily="var(--font-display)" fontSize="13" fontWeight="800">
+        <text x="134" y="58">ñam</text>
+        <text x="40" y="62">ñam</text>
+      </g>
+    );
+  }
+  if (action === 'festejo') {
+    return (
+      <g>
+        <Confetti />
+        <g className="fx-notes" fill={C.yellow} fontSize="20" fontWeight="800">
+          <text x="34" y="48">★</text>
+          <text x="152" y="40">♫</text>
+        </g>
+      </g>
+    );
+  }
+  if (action === 'mira') {
+    return (
+      <g className="cachete-q" fill={C.lilac} fontFamily="var(--font-display)" fontWeight="800">
+        <text x="148" y="44" fontSize="20">?</text>
+      </g>
+    );
+  }
+  if (action === 'mareo' || action === 'sacudida') {
     return (
       <g className="fx-orbit" fill={C.yellow}>
         <path d="M70 32 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 l5 -2 z" />

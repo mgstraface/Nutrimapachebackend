@@ -157,6 +157,48 @@
   position: relative;
   z-index: 1;
 }
+.den-help {
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.den-help:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+.gestures {
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+.gestures li {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+.gestures-emoji {
+  font-size: 1.4rem;
+  line-height: 1.2;
+  text-align: center;
+}
+.gestures-shake {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin: 0 0 14px;
+}
 .bubble {
   margin: 0 0 4px;
   max-width: 290px;

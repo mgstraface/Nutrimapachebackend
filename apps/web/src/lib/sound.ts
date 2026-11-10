@@ -2,7 +2,9 @@
  * Soniditos de Cachete, generados con Web Audio (sin archivos).
  * El contexto se crea recién con el primer toque (requisito del iPhone).
  */
-export type SoundKind = 'risita' | 'mimo' | 'choca' | 'boing' | 'abrazo' | 'baile' | 'bostezo' | 'carta' | 'agua' | 'mareo' | 'hola';
+export type SoundKind =
+  | 'risita' | 'mimo' | 'choca' | 'boing' | 'abrazo' | 'baile' | 'bostezo' | 'carta' | 'agua' | 'mareo' | 'hola'
+  | 'risa' | 'pop' | 'rasca' | 'nam' | 'festejo';
 
 let ctx: AudioContext | null = null;
 let enabled = true;
@@ -95,6 +97,27 @@ export function play(kind: SoundKind) {
     case 'mareo':
       tone(c, t, 300, 0.6, { type: 'triangle', to: 900, vol: 0.06 });
       tone(c, t + 0.3, 900, 0.6, { type: 'triangle', to: 300, vol: 0.06 });
+      break;
+    case 'risa':
+      // Carcajada: risitas que suben y bajan
+      [0, 0.1, 0.2, 0.3, 0.45, 0.55, 0.65, 0.8, 0.9].forEach((d, i) =>
+        tone(c, t + d, 700 + (i % 3) * 120, 0.08, { type: 'triangle', to: 950 + (i % 3) * 120, vol: 0.08 }),
+      );
+      break;
+    case 'pop':
+      tone(c, t, 880, 0.08, { type: 'sine', to: 1500, vol: 0.1 });
+      tone(c, t + 0.1, 600, 0.12, { type: 'sine', to: 420, vol: 0.06 });
+      break;
+    case 'rasca':
+      [0, 0.12, 0.24].forEach((d) => noise(c, t + d, 0.08, 0.06));
+      tone(c, t + 0.3, 440, 0.5, { vol: 0.05, to: 392 });
+      break;
+    case 'nam':
+      [0, 0.18, 0.36].forEach((d) => tone(c, t + d, 330, 0.1, { type: 'triangle', to: 220, vol: 0.09 }));
+      break;
+    case 'festejo':
+      [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(c, t + i * 0.11, f, 0.2, { type: 'triangle', vol: 0.07 }));
+      noise(c, t + 0.7, 0.25, 0.12);
       break;
     case 'hola':
       tone(c, t, 659, 0.12, { type: 'triangle', vol: 0.08 });
