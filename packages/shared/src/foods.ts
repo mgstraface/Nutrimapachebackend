@@ -410,9 +410,24 @@ export function matchFood(name: string): Food | null {
   const sing = q.replace(/(es|s)$/, '');
   const bySing = INDEX.find(({ keys }) => keys.some((k) => k === sing || k.replace(/(es|s)$/, '') === sing));
   if (bySing) return bySing.food;
+  const sg = (w: string) => w.replace(/(es|s)$/, '');
+  const qw = q.split(' ');
+  // Palabra por palabra en singular: "huevos revueltos" = "huevo revuelto"
+  const byWords = INDEX.find(({ keys }) => keys.some((k) => { const kw = k.split(' '); return kw.length === qw.length && kw.every((w, i) => sg(qw[i]!) === sg(w)); }));
+  if (byWords) return byWords.food;
+  // Lo escrito tiene una palabra más que un nombre conocido ("tomate perita" → "tomate"): se acepta.
+  // Con dos o más palabras de más ("nutella be ready") no, para no inventar.
+  let best: { food: Food; len: number } | null = null;
+  for (const { food, keys } of INDEX) {
+    for (const k of keys) {
+      const kw = k.split(' ');
+      if (qw.length - kw.length === 1 && kw.every((w, i) => sg(qw[i]!) === sg(w)) && (!best || k.length > best.len)) best = { food, len: k.length };
+    }
+  }
+  if (best) return best.food;
+  // Lo escrito es el comienzo de un nombre ("milane" → "Milanesa…")
   const first = searchFoods(name, 1)[0];
-  // Solo si la coincidencia es por palabra completa al inicio, para no inventar
-  return first && INDEX.find((x) => x.food === first)!.keys.some((k) => k.startsWith(q) || q.startsWith(k)) ? first : null;
+  return first && INDEX.find((x) => x.food === first)!.keys.some((k) => k.startsWith(q)) ? first : null;
 }
 
 /** Gramos (o ml) que representa una cantidad en cierta unidad para ese alimento. */
@@ -619,4 +634,124 @@ export function parseFoodsCsv(raw: string): FoodCsvResult {
 export function suggestedKcal(f: Food): number | null {
   const g = gramsFor(f, f.qty, f.unit);
   return g ? Math.round((f.kcal * g) / 100) : null;
+}
+
+/** Suma un alimento al catálogo en uso (cuando alguien carga uno nuevo desde una comida). */
+export function addFood(food: Food): void {
+  INDEX = [...INDEX.filter((x) => x.food.name !== food.name), { food, keys: [fold(food.name), ...(food.aliases ?? []).map(fold)].filter(Boolean) }];
+}
+
+/* ---------------- Texto libre → ingredientes (sin IA) ---------------- */
+
+export interface ParsedChunk {
+  /** El pedazo de texto tal como lo escribió */
+  text: string;
+  /** Nombre limpio (sin números ni unidades) */
+  name: string;
+  food: Food | null;
+  quantity?: number;
+  unit?: MealItem['unit'];
+}
+
+const WORD_NUM: Record<string, number> = {
+  un: 1, una: 1, uno: 1, medio: 0.5, media: 0.5, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, par: 2,
+};
+const UNIT_WORDS: [RegExp, MealItem['unit'] | 'unidad-ish' | 'feta' | 'envase'][] = [
+  [/^(g|gr|grs|gramos?)$/, 'g'],
+  [/^(ml|cc|mililitros?)$/, 'ml'],
+  [/^(kg|kilos?)$/, 'g'], // se multiplica abajo
+  [/^(tazas?|tazon(es)?)$/, 'taza'],
+  [/^(cdas?|cucharadas?|cucharitas?|cdtas?)$/, 'cda'],
+  [/^(porcion(es)?|platos?)$/, 'porción'],
+  [/^(fetas?)$/, 'feta'],
+  [/^(rodajas?|unidades?|u|piezas?|barritas?)$/, 'unidad-ish'],
+  [/^(vasos?|latas?|paquetes?|paquetitos?|bolsitas?|potes?|potecitos?|botellitas?)$/, 'envase'],
+];
+const STOP = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'unos', 'unas', 'cada', 'aprox', 'aproximadamente', 'mas', 'algo', 'un', 'una', 'uno', 'poco', 'poquito', 'chico', 'chica', 'grande', 'mediano', 'mediana']);
+
+/**
+ * Lee algo como "2 tostadas de 40 gr con mermelada y un café con leche" y lo separa
+ * en ingredientes, buscando cada uno en el catálogo. Lo que no reconoce vuelve con food = null.
+ */
+export function parseMealText(raw: string): ParsedChunk[] {
+  let text = fold(raw).replace(/[()¿?¡!]/g, ' ');
+  // Proteger nombres que llevan "con"/"y" adentro (café con leche, jamón y queso)
+  const multi = INDEX.flatMap((x) => x.keys).filter((k) => / (con|y|e) /.test(k) && text.includes(k));
+  for (const k of multi.sort((a, b) => b.length - a.length)) text = text.split(k).join(k.replace(/ /g, '_'));
+  const chunks = text
+    .split(/\s*(?:,|;|\+|\n|\.(?!\d)|\s(?:con|y|e|mas)\s)\s*/)
+    .map((c) => c.replace(/_/g, ' ').trim())
+    .filter((c) => c.length > 1);
+
+  return chunks.map((chunk) => {
+    // "40gr" → "40 gr"; "1/2" → 0.5
+    const words = chunk
+      .replace(/(\d)([a-z])/g, '$1 $2')
+      .replace(/\b1\/2\b/g, '0.5')
+      .split(/\s+/);
+    let count: number | undefined;
+    let amount: number | undefined;
+    let unit: MealItem['unit'] | undefined;
+    let isKg = false;
+    let fetas = false;
+    /** "un paquete de…", "un vaso de…": una porción típica de ese alimento */
+    let envase = false;
+    const nameWords: string[] = [];
+    /** Nombre manteniendo los "de" del medio (milanesa de pollo, salsa de tomate) */
+    const fullWords: string[] = [];
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]!;
+      const n = /^\d+([.,]\d+)?$/.test(w) ? Number(w.replace(',', '.')) : WORD_NUM[w] !== undefined && (i === 0 || STOP.has(words[i - 1]!)) ? WORD_NUM[w] : undefined;
+      if (n !== undefined) {
+        const next = words[i + 1] ?? '';
+        const u = UNIT_WORDS.find(([re]) => re.test(next));
+        if (u && u[1] !== 'unidad-ish' && u[1] !== 'feta' && u[1] !== 'envase') {
+          amount = n;
+          unit = u[1];
+          isKg = /^(kg|kilos?)$/.test(next);
+          i++;
+        } else {
+          if (u) i++; // "2 fetas de jamón", "1 paquete de…": cuenta como unidades
+          if (u?.[1] === 'feta') fetas = true;
+          if (u?.[1] === 'envase') envase = true;
+          if (count === undefined) count = n;
+          else amount ??= n;
+        }
+        continue;
+      }
+      if (!STOP.has(w) && !(nameWords.length === 0 && WORD_NUM[w] !== undefined)) nameWords.push(w);
+      if (fullWords.length || !STOP.has(w)) fullWords.push(w);
+    }
+    if (isKg && amount) amount *= 1000;
+    while (fullWords.length && STOP.has(fullWords[fullWords.length - 1]!)) fullWords.pop();
+    const full = fullWords.join(' ').trim();
+    const name = full || nameWords.join(' ').trim() || chunk;
+    const food = matchFood(full) ?? matchFood(nameWords.join(' '));
+    let quantity: number | undefined;
+    let u: MealItem['unit'] | undefined;
+    if (amount && unit) {
+      // "2 tostadas de 40 gr" → 80 g ; "café de 200 ml" → 200 ml
+      quantity = count && (unit === 'g' || unit === 'ml') ? count * amount : amount;
+      u = unit;
+    } else if (count !== undefined) {
+      quantity = count;
+      u = food && (food.unit === 'unidad' || food.unit === 'porción') ? food.unit : food?.each ? 'unidad' : food ? food.unit : 'unidad';
+      if (envase && food) {
+        quantity = count * food.qty;
+        u = food.unit;
+      } else if (fetas && food && food.unit === 'g') {
+        // una feta de fiambre o queso ≈ 20 g
+        quantity = count * 20;
+        u = 'g';
+      } else if (food && (food.unit === 'g' || food.unit === 'ml') && !food.each) {
+        // "2 yogures" sin unidad: 2 veces la porción sugerida
+        quantity = count * food.qty;
+        u = food.unit;
+      }
+    } else if (food) {
+      quantity = food.qty;
+      u = food.unit;
+    }
+    return { text: chunk, name: food ? food.name : name.charAt(0).toUpperCase() + name.slice(1), food, quantity, unit: u };
+  });
 }

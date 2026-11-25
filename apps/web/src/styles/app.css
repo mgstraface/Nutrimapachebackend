@@ -2107,3 +2107,65 @@ textarea {
   font-size: var(--step--1);
   color: var(--ink);
 }
+
+/* calcular desde el texto y "Lo cargo yo" */
+.calc-text {
+  margin-top: -4px;
+}
+.item-est.is-missing .link {
+  font-size: inherit;
+  padding: 0;
+}
+.quick-food {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1.5px dashed var(--lamp);
+  border-radius: var(--radius-s);
+  background: var(--lamp-soft);
+}
+.quick-food-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: var(--step--1);
+}
+.quick-food input,
+.quick-food select {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+  padding: 0 10px;
+  font: inherit;
+  min-width: 0;
+}
+.quick-food-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+}
+.quick-food-row.qf-main {
+  grid-template-columns: 76px auto 52px minmax(0, 1fr);
+}
+.quick-food-row input,
+.quick-food-row select {
+  width: 100%;
+}
+.quick-food-row span {
+  flex: none;
+  font-size: var(--step--1);
+  color: var(--ink-2);
+}
+.quick-food-row .qf-opt {
+  font-size: 0.7rem;
+}
+.quick-food-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.quick-food .hint {
+  margin: 0;
+}

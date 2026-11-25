@@ -125,6 +125,8 @@ const foodSchema = new Schema(
     qty: { type: Number, required: true },
     each: { type: Number },
     aliases: { type: [String], default: [] },
+    /** Quién lo sumó desde una comida (null = catálogo inicial o admin) */
+    createdBy: { type: Schema.Types.ObjectId, default: null },
   },
   { timestamps: true },
 );

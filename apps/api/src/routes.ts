@@ -409,8 +409,26 @@ export function apiRouter(): Router {
     requireUser,
     h(async (_req, res) => {
       const docs = await FoodItem.find().sort({ name: 1 }).lean();
-      res.setHeader('Cache-Control', 'private, max-age=60');
       res.json(docs.map(toFood));
+    }),
+  );
+
+  /**
+   * Cualquiera puede sumar un alimento que no está (ej. lo que dice el paquete) desde una comida.
+   * Editar y borrar queda para el admin. Si ya existe con ese nombre, devuelve el existente.
+   */
+  r.post(
+    '/foods',
+    requireUser,
+    h(async (req, res) => {
+      const data = foodInputSchema.parse(req.body);
+      const existing = await FoodItem.findOne({ name: new RegExp(`^${escapeRe(data.name)}$`, 'i') }).lean();
+      if (existing) {
+        res.json({ food: toFood(existing), existed: true });
+        return;
+      }
+      const doc = await FoodItem.create({ ...data, createdBy: req.user!.id });
+      res.status(201).json({ food: toFood(doc.toObject()), existed: false });
     }),
   );
 

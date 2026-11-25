@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { estimateFromFood, fillFromCatalog, formatRange, matchFood, mealFeedback, searchFoods, weekSummary, sumRanges, type Food, type AnalysisQuota, type Meal, type MealFeedback, type MealItem, type MealTipsResponse, type PhotoAnalysis, type Range } from '@nutrimapache/shared';
+import { addFood, estimateFromFood, fillFromCatalog, formatRange, matchFood, mealFeedback, parseMealText, searchFoods, type FoodInput, type ParsedChunk, weekSummary, sumRanges, type Food, type AnalysisQuota, type Meal, type MealFeedback, type MealItem, type MealTipsResponse, type PhotoAnalysis, type Range } from '@nutrimapache/shared';
 import { Cachete } from '../../mascot/Cachete';
 import { api, errorText } from '../../lib/api';
 import { preparePhoto } from '../../lib/photo';
@@ -84,6 +84,9 @@ export function MealSheet({ target, onClose }: Props) {
   /** Ingrediente con el buscador abierto */
   const [suggestFor, setSuggestFor] = useState<number | null>(null);
   const [estimating, setEstimating] = useState(false);
+  /** Ingrediente con el formulario "Lo cargo yo" abierto */
+  const [customFor, setCustomFor] = useState<number | null>(null);
+  const [textNote, setTextNote] = useState<string | null>(null);
   /** Después de guardar: la "miradita" de Cachete sobre la comida */
   const [review, setReview] = useState<{ meal: Meal; fb: MealFeedback } | null>(null);
   const [tips, setTips] = useState<string[] | null>(null);
@@ -98,6 +101,8 @@ export function MealSheet({ target, onClose }: Props) {
     setAnalyzing(false);
     setAiNote(null);
     setReview(null);
+    setTextNote(null);
+    setCustomFor(null);
     setTips(null);
     setTipsBusy(false);
     if (editing) {
@@ -169,6 +174,31 @@ export function MealSheet({ target, onClose }: Props) {
     setSuggestFor(null);
   };
 
+  /** "2 tostadas con queso y un café" → ingredientes, buscando en la lista (sin IA). */
+  const fromText = (): ItemDraft[] =>
+    parseMealText(description).map((c: ParsedChunk) => reestimate({ name: c.name, food: c.food, quantity: c.quantity, unit: c.unit ?? 'g', group: c.food?.group ?? 'otro', source: 'usuaria' }));
+
+  const calcFromText = () => {
+    const drafts = fromText();
+    if (!drafts.length) return;
+    // Lo que ya estaba cargado a mano se mantiene; se suma lo que salió del texto.
+    setItems([...items.filter((i) => i.name.trim()), ...drafts]);
+    const missing = drafts.filter((d) => !d.kcal).length;
+    setTextNote(
+      missing === 0
+        ? 'Lo armé con tu texto. Revisá las cantidades: si algo no es así, cambialo.'
+        : `Armé ${drafts.length - missing} de ${drafts.length} con tu texto. ${missing === 1 ? 'Lo que está marcado no lo tengo' : 'Los marcados no los tengo'}: podés cargarlo vos o calcularlo con IA.`,
+    );
+  };
+
+  /** Alimento nuevo cargado desde la comida (lo que dice el paquete). */
+  const createFood = async (idx: number, input: FoodInput) => {
+    const r = await api<{ food: Food; existed: boolean }>('/foods', { method: 'POST', body: input });
+    addFood(r.food);
+    pickFood(idx, r.food);
+    setCustomFor(null);
+  };
+
   /** Para lo que no está en la lista: estimación con IA a partir del texto (sin fotos). */
   const estimateWithAi = async () => {
     setEstimating(true);
@@ -235,8 +265,10 @@ export function MealSheet({ target, onClose }: Props) {
   };
 
   const save = async () => {
-    const cleanItems: MealItem[] = fillFromCatalog(items
-      .filter((i) => i.name.trim())
+    // Si solo escribió el texto, se arman los ingredientes que se reconocen para tener una estimación.
+    const named = items.filter((i) => i.name.trim());
+    const source = named.length === 0 && description.trim() ? fromText().filter((d) => d.kcal) : named;
+    const cleanItems: MealItem[] = fillFromCatalog(source
       .map((i) => ({
         name: i.name.trim(),
         quantity: i.quantity,
@@ -422,6 +454,12 @@ export function MealSheet({ target, onClose }: Props) {
                   onChange={(e) => setDescription(e.target.value)}
                 />
               </label>
+              {description.trim().length > 2 && !items.some((i) => i.name.trim()) && (
+                <button type="button" className="btn-soft calc-text" onClick={calcFromText}>
+                  🧮 Calcular calorías
+                </button>
+              )}
+              {textNote && <p className="ai-note">{textNote}</p>}
 
               <div className="field">
                 <span>Ingredientes (opcional)</span>
@@ -468,12 +506,20 @@ export function MealSheet({ target, onClose }: Props) {
                         {showMacros && it.protein ? `proteína ${formatRange(it.protein, 'g')}` : ''}
                         {unitHint(it)}
                       </p>
-                    ) : it.name.trim().length > 1 && !it.kcal ? (
-                      <p className="item-est is-missing">{it.quantity ? 'No lo tengo en mi lista' : 'Poné la cantidad y te digo cuánto es'}</p>
+                    ) : it.name.trim().length > 1 && !it.kcal && customFor !== idx ? (
+                      <p className="item-est is-missing">
+                        {it.quantity && !(it.food ?? matchFood(it.name)) ? 'No lo tengo en mi lista. ' : !it.quantity ? 'Poné la cantidad y te digo cuánto es. ' : ''}
+                        {!(it.food ?? matchFood(it.name)) && (
+                          <button type="button" className="link" onClick={() => setCustomFor(idx)}>
+                            Lo cargo yo (sé las calorías)
+                          </button>
+                        )}
+                      </p>
                     ) : null}
+                    {customFor === idx && <QuickFood name={it.name.trim()} onCancel={() => setCustomFor(null)} onSave={(f) => createFood(idx, f)} />}
                   </div>
                 ))}
-                {quota?.enabled && items.some((i) => i.name.trim().length > 1 && i.quantity && !i.kcal) && (
+                {quota?.enabled && items.some((i) => i.name.trim().length > 1 && !i.kcal && !(i.food ?? matchFood(i.name))) && (
                   <button type="button" className="btn-soft" disabled={estimating || photoLeft === 0} onClick={() => void estimateWithAi()}>
                     {estimating ? 'Calculando…' : '✨ Calcular lo que falta con IA'}
                   </button>
@@ -674,5 +720,91 @@ function FoodSuggestions({ query, current, onPick }: { query: string; current: F
         </li>
       ))}
     </ul>
+  );
+}
+
+const QUICK_UNITS = ['porción', 'unidad', 'g', 'ml'] as const;
+
+/**
+ * "Lo cargo yo": un alimento nuevo con lo que dice el paquete (ej. Nutella B-ready, 100 kcal la unidad).
+ * Se guarda en la lista para todos y el admin lo puede corregir después.
+ */
+function QuickFood({ name: initial, onSave, onCancel }: { name: string; onSave: (f: FoodInput) => Promise<void>; onCancel: () => void }) {
+  const [name, setName] = useState(initial);
+  const [kcal, setKcal] = useState('');
+  const [amount, setAmount] = useState('1');
+  const [unit, setUnit] = useState<(typeof QUICK_UNITS)[number]>('unidad');
+  const [grams, setGrams] = useState('');
+  const [protein, setProtein] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const n = (v: string) => parseFloat(v.replace(',', '.'));
+  const perPiece = unit === 'unidad' || unit === 'porción';
+
+  const submit = async () => {
+    const k = n(kcal);
+    const a = n(amount);
+    const g = n(grams);
+    const p = protein.trim() ? n(protein) : 0;
+    if (name.trim().length < 2) return setError('Poné un nombre.');
+    if (!(k >= 0 && k < 5000)) return setError('Poné las calorías (un número).');
+    if (!(a > 0)) return setError('¿Para cuánto son esas calorías?');
+    if (!(p >= 0)) return setError('La proteína tiene que ser un número.');
+    // Todo se guarda cada 100 g. Si no sabe cuánto pesa la unidad, se toma como 100 g (da lo mismo para la cuenta).
+    const each = perPiece ? (g > 0 ? g : 100) : undefined;
+    const totalGrams = perPiece ? a * each! : a;
+    const kcal100 = Math.round(((k * 100) / totalGrams) * 10) / 10;
+    const protein100 = Math.round(((p * 100) / totalGrams) * 10) / 10;
+    if (kcal100 > 950) return setError(perPiece && !(g > 0) ? 'Para tantas calorías, decime cuánto pesa (lo dice el paquete).' : 'Revisá: da más calorías de lo posible para ese peso.');
+    if (protein100 > 100) return setError('Revisá la proteína: da más que el peso.');
+    setBusy(true);
+    setError(null);
+    try {
+      await onSave({ name: name.trim(), group: 'otro', kcal: kcal100, protein: protein100, unit, qty: a, each, aliases: [] });
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="quick-food">
+      <p className="quick-food-title">Cargalo con lo que dice el paquete</p>
+      <input aria-label="Nombre del alimento" value={name} maxLength={50} onChange={(e) => setName(e.target.value)} placeholder="Ej: Nutella B-ready" />
+      <div className="quick-food-row qf-main">
+        <input aria-label="Calorías" inputMode="decimal" value={kcal} onChange={(e) => setKcal(e.target.value)} placeholder="100" autoFocus />
+        <span>kcal por</span>
+        <input aria-label="Cantidad" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="qf-amount" />
+        <select aria-label="Unidad" value={unit} onChange={(e) => setUnit(e.target.value as (typeof QUICK_UNITS)[number])}>
+          {QUICK_UNITS.map((u) => (
+            <option key={u}>{u}</option>
+          ))}
+        </select>
+      </div>
+      <div className="quick-food-row">
+        {perPiece && (
+          <>
+            <input aria-label="Peso en gramos" inputMode="decimal" value={grams} onChange={(e) => setGrams(e.target.value)} placeholder="Peso (g)" />
+            <span className="qf-opt">opcional</span>
+          </>
+        )}
+        <input aria-label="Proteína en gramos" inputMode="decimal" value={protein} onChange={(e) => setProtein(e.target.value)} placeholder="Proteína (g)" />
+        <span className="qf-opt">opcional</span>
+      </div>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="quick-food-actions">
+        <button type="button" className="btn-quiet btn-small" disabled={busy} onClick={onCancel}>
+          Cancelar
+        </button>
+        <button type="button" className="btn-primary btn-small" disabled={busy || !kcal.trim()} onClick={() => void submit()}>
+          {busy ? 'Guardando…' : 'Guardar y usar'}
+        </button>
+      </div>
+      <p className="hint">Queda guardado en la lista de alimentos para la próxima.</p>
+    </div>
   );
 }
